@@ -150,8 +150,6 @@ this.addTransformer(transformer);
 		//Soon TM
 	}
 
-//Enable on Java 9
-	
 	@Override
 	public void redefineModule(Module module, Set<Module> extraReads, Map<String, Set<Module>> extraExports,
 			Map<String, Set<Module>> extraOpens, Set<Class<?>> extraUses, Map<Class<?>, List<Class<?>>> extraProvides) {

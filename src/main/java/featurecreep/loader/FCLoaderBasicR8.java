@@ -150,7 +150,7 @@ this.mods_loaded=true;
     for (int m = 0; m < getRunModules().size(); m++) {
 
       String main = FCFileSystemClassPathModuleFinder.getMainClass(getRunModules().get(m));
-      if (main != null) {
+      if (main != null && main.length() > 0) {
 System.out.println(main);
         try {
         	getRunModules().get(m).run(new String[] {
