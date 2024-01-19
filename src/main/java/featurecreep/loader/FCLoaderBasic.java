@@ -386,5 +386,6 @@ public default void combineModuleDepSpecs() {
 
 public boolean getModsLoaded();
 
+public ExecutionSide getExecutionSide();
 
 }

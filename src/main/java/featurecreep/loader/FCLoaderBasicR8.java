@@ -44,8 +44,9 @@ public ClassTransformer main_transformer = new FCTransformer(this);
 public EventViewer eventvwr = new EventViewer();
 public ArrayList<String> known_nulls = new ArrayList<String>();
 public boolean mods_loaded = false;
+public ExecutionSide side;
 
-  public FCLoaderBasicR8(Path[] mod_locations, Path[] classpath_locations, String[] current_packages_exported, int threads, boolean debug_mode) { //We will probably add more variables son
+  public FCLoaderBasicR8(Path[] mod_locations, Path[] classpath_locations, String[] current_packages_exported, int threads, boolean debug_mode, ExecutionSide side) { //We will probably add more variables son
     this.mod_locations = mod_locations;
     this.classpath_locations = classpath_locations;
     this.current_packages_exported.addAll(Arrays.asList(current_packages_exported));
@@ -54,7 +55,7 @@ public boolean mods_loaded = false;
     if(!this.getDebugMode()) {
     	System.out.println("Debug mode is off");
     }
-    
+    this.side=side;
     /*try {
       FileSystemClassPathModuleFinder.class.getDeclaredMethod("addSystemDependencies", ModuleSpec.Builder.class).setAccessible(true);
     } catch (NoSuchMethodException | SecurityException e) {
@@ -357,6 +358,12 @@ public ArrayList<String> known_nils() {
 public boolean getModsLoaded() {
 	// TODO Auto-generated method stub
 	return mods_loaded;
+}
+
+@Override
+public ExecutionSide getExecutionSide() {
+	// TODO Auto-generated method stub
+	return side;
 }
 
 
