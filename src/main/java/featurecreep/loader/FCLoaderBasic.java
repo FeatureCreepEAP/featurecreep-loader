@@ -141,21 +141,24 @@ public interface FCLoaderBasic {
   public default ArrayList <File> getRunOnlyFiles(){
 	  ArrayList <File> fils = new ArrayList <File> ();
 	  for (int m = 0; m < getModulePKZipLocations().length; m++) {
-		
+			if (getModulePKZipLocations()[m].toFile().listFiles() !=null) {
 		for (int f = 0; f <getModulePKZipLocations()[m].toFile().listFiles().length; f++) {
 		  fils.add(getModulePKZipLocations()[m].toFile().listFiles()[f]);
 		}
 	  }
+	 }
 	  return fils;
   }
 
  public default ArrayList <File> getClassPathFiles(){
 	  ArrayList <File> fils = new ArrayList <File> ();
 	  for (int r = 0; r < getClassPathPKZipLocations().length; r++) {
+	   if (getClassPathPKZipLocations()[r].toFile().listFiles() !=null) {
 		for (int f = 0; f <getClassPathPKZipLocations()[r].toFile().listFiles().length; f++) {
 		  fils.add(getClassPathPKZipLocations()[r].toFile().listFiles()[f]);
 		 
 		}
+	   }
 	  }
 	  return fils;
   }
@@ -163,14 +166,19 @@ public interface FCLoaderBasic {
  public default ArrayList <File> getCombinedFiles(){
 	  ArrayList <File> fils = new ArrayList <File> ();
 	  for (int r = 0; r < getClassPathPKZipLocations().length; r++) {
-		for (int f = 0; f <getClassPathPKZipLocations()[r].toFile().listFiles().length; f++)
+		if (getClassPathPKZipLocations()[r].toFile().listFiles() !=null) {
+		for (int f = 0; f <getClassPathPKZipLocations()[r].toFile().listFiles().length; f++) {
 		  fils.add(getClassPathPKZipLocations()[r].toFile().listFiles()[f]);
+		} 
 	  }
+	}
 	  for (int m = 0; m < getModulePKZipLocations().length; m++) {
-			for (int f = 0; f <getModulePKZipLocations()[m].toFile().listFiles().length; f++)
+			if (getModulePKZipLocations()[m].toFile().listFiles() !=null) {
+			for (int f = 0; f <getModulePKZipLocations()[m].toFile().listFiles().length; f++) {
 			  fils.add(getModulePKZipLocations()[m].toFile().listFiles()[f]);
+			}
 		  }
-	  
+	  }
 	  
 	  return fils;
  }
