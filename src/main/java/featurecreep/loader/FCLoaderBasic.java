@@ -108,7 +108,7 @@ public interface FCLoaderBasic {
   }
   
   public static MethodType PREMAIN_METHOD_TYPE() {
-	return	  MethodType.methodType(void.class, String[].class, Instrumentation.class);
+	return	  MethodType.methodType(void.class, String.class, Instrumentation.class);
   }
   
   public static MethodType PREMAIN_EVENTVWR_METHOD_TYPE() {
@@ -200,7 +200,7 @@ for(File file:getCombinedFiles()) {
 	}
 	return null; // TODO Auto-generated catch block
  }
- 
+ //We eventually need to make this check with byte[]
  public static boolean isFilePKZipCompatible(File file) {
 	 for(String end:filetypes.PKZIP_COMPATIBLES) {
 			if(file.toString().endsWith(end)) {
@@ -299,9 +299,10 @@ public default void runAgents() {
     }
 }
 
+//Need to account for main and premain differences, i originally thought they could have been together
 public default void runAgent(Module agent) {
 	for(String agent_clazz:this.getAgents().get(agent)) {
-
+System.out.println(agent_clazz);
 	        final ClassLoader oldClassLoader = FCFileSystemClassPathModuleFinder.setContextClassLoader(agent.getClassLoader());
 	        try {
 	            final Class<?> mainClass = Class.forName(agent_clazz, false, agent.getClassLoader());
@@ -315,10 +316,10 @@ public default void runAgent(Module agent) {
 
 	                try {
 						methodHandle = lookup.findStatic(mainClass, "premain", PREMAIN_METHOD_TYPE());
-						methodHandle.invokeExact(new String[] {},this.getInstrumentation());
+						methodHandle.invokeExact(new String(""),this.getInstrumentation());
 					} catch (Exception e) {
 						// TODO Auto-generated catch block
-				//		e.printStackTrace();
+						e.printStackTrace();
 					}
 
 	                
@@ -334,7 +335,7 @@ public default void runAgent(Module agent) {
 	                try {
 						methodHandleMain = lookup.findStatic(mainClass, "agentmain", PREMAIN_METHOD_TYPE());
 //TODO: this is a hack to make sure that the instrumentation is set correctly. no args yet    
-						methodHandleMain.invokeExact(new String[] {},this.getInstrumentation());
+						methodHandleMain.invokeExact(new String(""),this.getInstrumentation());
 					} catch (Exception e) {
 						// TODO Auto-generated catch block
 						//e.printStackTrace();

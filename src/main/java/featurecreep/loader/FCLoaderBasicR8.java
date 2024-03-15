@@ -127,13 +127,18 @@ public ExecutionSide side;
     
     for (int c = 0; c < getClassPathFiles().size(); c++) { // Soon I need to do with XML
     if(! this.known_nils().contains(getClassPathFiles().get(c).toString())){
+    	if (getClassPathFiles().get(c).isFile()) {//Temporary until we get folder dirs
     	this.loadModule(getClassPathFiles().get(c).toString(), false);
+    	}
     }
     }
     System.out.println("Loading Runabble Mods");
     for (int c = 0; c < getRunOnlyFiles().size(); c++) { // Soon I need to do with XML
         if(! this.known_nils().contains(getRunOnlyFiles().get(c).toString())){
-    	this.loadModule(getRunOnlyFiles().get(c).toString(), true);
+        	if(getRunOnlyFiles().get(c).isFile()) {//Temporary until we get folder modules
+        	System.out.println(getRunOnlyFiles().get(c).toString());
+        	this.loadModule(getRunOnlyFiles().get(c).toString(), true);
+        	}
         }
     }
 this.combineModuleDepSpecs();//Temp
@@ -153,16 +158,18 @@ this.mods_loaded=true;
       String main = FCFileSystemClassPathModuleFinder.getMainClass(getRunModules().get(m));
       if (main != null && main.length() > 0) {
 System.out.println(main);
-        try {
+      if(main.contains("coderbot")) {//Until i finally get transformers  uniformally working
+		try {
         	getRunModules().get(m).run(new String[] {
             ""
           });
-          
+		
         } catch (NoSuchMethodException | InvocationTargetException | ClassNotFoundException e) {
           // TODO Auto-generated catch block
             if(this.getDebugMode()) {
         	e.printStackTrace();
             }
+      }
       }
 
     }else {
@@ -273,11 +280,21 @@ public Module loadModule(String name, boolean runnable) {
 				if(jar.getManifest()!=null) {
 					
 					String agent_class = jar.getManifest().getMainAttributes().getValue("Agent-Class");
-					
-					if(agent_class!=null) {
-						agent = new ArrayList<String>(Arrays.asList(agent_class.split(",")));
+					String preagent_class = jar.getManifest().getMainAttributes().getValue("Premain-Class");
+
+					if(agent_class!=null && preagent_class!=null) {
+						agent = new ArrayList<String>();
+						agent.addAll(Arrays.asList(agent_class.split(",")));
+						agent.addAll(Arrays.asList(preagent_class.split(",")));
+					}else if(agent_class!=null) {
+						agent = new ArrayList<String>();
+						agent.addAll(Arrays.asList(agent_class.split(",")));
+					}else if(preagent_class!=null) {
+						agent = new ArrayList<String>();
+						agent.addAll(Arrays.asList(preagent_class.split(",")));
 					}
-						
+				
+					
 				}
 				
 				
@@ -295,7 +312,7 @@ public Module loadModule(String name, boolean runnable) {
     try {
       mod = getLoader().loadModule(name);
 
-      if(agent !=null) {
+      if(agent !=null) { 
       this.agents.put(mod, agent);
       }
       
