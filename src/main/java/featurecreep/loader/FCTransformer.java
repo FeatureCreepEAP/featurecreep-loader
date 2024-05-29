@@ -27,7 +27,7 @@ this.loader=loader;
 			
 		}	
 		
-		return classBytes;
+		return buff;
 	}
 
 }

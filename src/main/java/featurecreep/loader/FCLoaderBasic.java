@@ -80,7 +80,7 @@ public interface FCLoaderBasic {
     JarFile jar;
 
     jar = new JarFile(location.toString());
-    StringBuilder contentBuilder = new StringBuilder();
+    //StringBuilder contentBuilder = new StringBuilder();
     InputStream stream = jar.getInputStream(jar.getJarEntry("module.xml"));
     return stream;
 
@@ -120,7 +120,7 @@ public interface FCLoaderBasic {
     try {
     JarEntry entry =	location.getJarEntry("module.xml");
     if(entry!=null) {
-      InputStream stream = location.getInputStream(entry);
+      location.getInputStream(entry);
       return true;
       }
     return false;
@@ -202,7 +202,7 @@ for(File file:getCombinedFiles()) {
  }
  //We eventually need to make this check with byte[]
  public static boolean isFilePKZipCompatible(File file) {
-	 for(String end:filetypes.PKZIP_COMPATIBLES) {
+	 for(String end:FileTypes.PKZIP_COMPATIBLES) {
 			if(file.toString().endsWith(end)) {
 		return true;
 			}
@@ -219,9 +219,11 @@ for(File file:getCombinedFiles()) {
 		JarFile jar = new JarFile(file);
 		for (JarEntry entry : Collections.list(jar.entries())) {
 			if (entry.getName().equals(filename)) {
-                return true;
+				jar.close();
+				return true;
             }
 		}
+		jar.close();
 	} catch (IOException e) {
 		// TODO Auto-generated catch block
 		e.printStackTrace();

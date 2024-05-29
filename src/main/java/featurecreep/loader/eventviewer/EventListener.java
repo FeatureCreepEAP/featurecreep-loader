@@ -7,7 +7,7 @@ import java.lang.reflect.Method;
 public class EventListener {
 
 	//Method Reference Soon
-	public EventListener(EventViewer eventvwr, String event_name, String method_name, Object instance, Class ... param_classes) {
+	public EventListener(EventViewer eventvwr, String event_name, String method_name, Object instance, Class<?> ... param_classes) {
 		super();
 		this.event_name = event_name;
 		this.method_name = method_name;
@@ -18,7 +18,7 @@ public class EventListener {
 	public String method_name;
 	public Object instance;
 	public EventViewer eventvwr;
-public Class[] param_classes;
+public Class<?>[] param_classes;
 
 	public Object invoke() {
 EventViewerEvent event = eventvwr.getEvent(event_name);

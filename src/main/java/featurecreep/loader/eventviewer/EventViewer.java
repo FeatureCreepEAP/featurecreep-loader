@@ -72,7 +72,7 @@ public EventListener registerListener(EventListener listener) {
     return listener;
 }
 
-public EventListener registerListener(String event_name, String method_name, Object instance, Class ... param_classes) {
+public EventListener registerListener(String event_name, String method_name, Object instance, Class<?> ... param_classes) {
 	return this.registerListener(new EventListener(this, event_name,method_name,instance,param_classes));
 }
 

@@ -10,7 +10,7 @@ public interface GetPackagesFromClassLoader {
 
     String[] packages_needed;
 
-    List < String > package_list = new ArrayList();
+    List < String > package_list = new ArrayList<String>();
 
     for (int j = 0; j < Package.getPackages().length; j++) {
 
