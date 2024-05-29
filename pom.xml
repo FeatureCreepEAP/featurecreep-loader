@@ -1,13 +1,31 @@
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
-  <modelVersion>4.0.0</modelVersion>
-  <groupId>featurecreep-loader</groupId>
-  <artifactId>featurecreep-loader</artifactId>
-  <version>0.0.1-SNAPSHOT</version>
-  <dependencies>
-  	<dependency>
-  		<groupId>org.jboss.modules</groupId>
-  		<artifactId>jboss-modules</artifactId>
-  		<version>1.12.2.Final</version>
-  	</dependency>
-  </dependencies>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">  
+  <modelVersion>4.0.0</modelVersion>  
+  <groupId>com.asbestosstar</groupId>  
+  <artifactId>featurecreep-loader</artifactId>  
+  <version>0.0.1-SNAPSHOT</version>  
+  <properties>  
+    <maven.compiler.target>1.8</maven.compiler.target>  
+    <maven.compiler.source>1.8</maven.compiler.source>  
+  </properties>  
+  <dependencies>  
+    <dependency>  
+      <groupId>org.jboss.modules</groupId>  
+      <artifactId>jboss-modules</artifactId>  
+      <version>1.12.2.Final</version>  
+    </dependency>  
+    <!-- 可能需要添加其他与 Java 11 相关的依赖或插件 -->  
+  </dependencies>  
+  <build>  
+    <plugins>  
+      <plugin>  
+        <groupId>org.apache.maven.plugins</groupId>  
+        <artifactId>maven-compiler-plugin</artifactId>  
+        <version>3.8.1</version> <!-- 使用合适的版本 -->  
+        <configuration>  
+          <source>1.8</source>  
+          <target>11</target>  
+        </configuration>  
+      </plugin>  
+    </plugins>  
+  </build>  
 </project>
