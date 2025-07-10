@@ -39,7 +39,6 @@ public class FileSystemEntryResource implements Resource {
 	 * @param name                     the name of the resource. It will be turned
 	 *                                 into a multirelease file by default
 	 * @param relativePath             the relative path inside the JAR
-	 * @param zip                      the zip
 	 * @param multi_release_entry_name Should convert the entry to the multi release
 	 *                                 name;
 	 */
@@ -63,7 +62,6 @@ public class FileSystemEntryResource implements Resource {
 	 * @param name         the name of the resource. It will be turned into a
 	 *                     multirelease file by default
 	 * @param relativePath the relative path inside the JAR
-	 * @param zip          the zip
 	 */
 	public FileSystemEntryResource(final String name, final String relativePath, FileSystem fs) {
 		this(name, relativePath, fs, true);

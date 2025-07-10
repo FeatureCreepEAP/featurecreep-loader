@@ -233,12 +233,12 @@ public interface FileSystem {
 		}
 
 	}
+//	 * @param uri                A URI for the new filesystem. May be null.
 
 	/**
 	 * Creates a sub filesystem with only the files in the relative directory.
 	 * Changes are not reflected in the original filesystem
 	 * 
-	 * @param uri                A URI for the new filesystem. May be null.
 	 * @param relative_directory The relative directory
 	 * @return
 	 */
