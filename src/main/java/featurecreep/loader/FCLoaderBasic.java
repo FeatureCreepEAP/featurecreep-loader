@@ -433,28 +433,23 @@ public interface FCLoaderBasic {
 		this.getTransformers().add(new JLIClassTransformer(transformer));
 	}
 
-	public default void runAgents() {
+	public default void PremainAgents() {
 		for (Module agent : this.getRunModules()) {
-			this.runAgent(agent);
+			this.runAgentPremain(agent);
 		}
 	}
 
 //Need to account for main and premain differences, i originally thought they could have been together
-	public default void runAgent(Module agent) {
+	public default void runAgentPremain(Module agent) {
 
 		String preagent_class = agent.getProperty("Premain-Class");
 		String early_listener_class = agent.getProperty("EarlyListener-Class");
-		String agent_class = agent.getProperty("Agent-Class");
 
 		ArrayList<String> preagent = new ArrayList<String>();
-		ArrayList<String> agents = new ArrayList<String>();
 		ArrayList<String> early_listeners = new ArrayList<String>();
 
 		if (preagent_class != null) {
 			preagent.addAll(Arrays.asList(preagent_class.split(",")));
-		}
-		if (agent_class != null) {
-			agents.addAll(Arrays.asList(agent_class.split(",")));
 		}
 
 		if (early_listener_class != null) {
@@ -505,25 +500,7 @@ public interface FCLoaderBasic {
 
 			}
 
-			for (String agent_clazz : agents) {
 
-				final Class<?> mainClass = Class.forName(agent_clazz, false, agent.getClassLoader());
-
-				Class.forName(agent_clazz, true, agent.getClassLoader());
-
-				final MethodHandles.Lookup lookup = MethodHandles.lookup();
-				final MethodHandle methodHandleMain;
-
-				try {
-					methodHandleMain = lookup.findStatic(mainClass, "agentmain", PREMAIN_METHOD_TYPE());
-//TODO: this is a hack to make sure that the instrumentation is set correctly. no args yet    
-					methodHandleMain.invokeExact(new String(""), this.getInstrumentation());
-				} catch (Exception e) {
-					// TODO Auto-generated catch block
-					// e.printStackTrace();
-				}
-
-			}
 
 		} catch (Throwable e) {
 			// TODO Auto-generated catch block
@@ -536,6 +513,79 @@ public interface FCLoaderBasic {
 
 	}
 
+	
+	//Need to account for main and premain differences, i originally thought they could have been together
+	public default void runAgent(Module agent) {
+
+		String agent_class = agent.getProperty("Agent-Class");
+
+		ArrayList<String> agents = new ArrayList<String>();
+
+	
+		if (agent_class != null) {
+			agents.addAll(Arrays.asList(agent_class.split(",")));
+		}
+
+
+
+		try {
+
+			for (String agent_clazz : agents) {
+
+				final Class<?> mainClass = Class.forName(agent_clazz, false, agent.getClassLoader());
+
+				Class.forName(agent_clazz, true, agent.getClassLoader());
+
+				final MethodHandles.Lookup lookup = MethodHandles.lookup();
+				final MethodHandle methodHandleMain;
+
+				try {
+					methodHandleMain = lookup.findStatic(mainClass, "agentmain", PREMAIN_METHOD_TYPE());
+		//TODO: this is a hack to make sure that the instrumentation is set correctly. no args yet    
+					methodHandleMain.invokeExact(new String(""), this.getInstrumentation());
+				} catch (Exception e) {
+					// TODO Auto-generated catch block
+					// e.printStackTrace();
+				}
+
+			}
+
+	
+
+
+
+		} catch (Throwable e) {
+			// TODO Auto-generated catch block
+			if (this.getDebugMode()) {
+				e.printStackTrace();
+			}
+		} 
+
+	}
+	
+	
+	
+	
+	
+	
+
+	
+	
+	
+	
+	
+	
+
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
 	public ClassTransformer getMainTransformer();
 
 	/**

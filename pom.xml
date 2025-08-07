@@ -9,6 +9,10 @@
 		<maven.compiler.target>1.8</maven.compiler.target>
 		<maven.compiler.source>1.8</maven.compiler.source>
 	</properties>
+	
+	
+	
+	
 	<dependencies>
 		<dependency>
 			<groupId>org.jboss.modules</groupId>
@@ -19,6 +23,9 @@
 
 		<!-- 可能需要添加其他与 Java 11 相关的依赖或插件 -->
 	</dependencies>
+	
+	
+	
 
 
 	<!-- Add necessary metadata for Maven Central -->
@@ -134,6 +141,8 @@
 					<autoPublish>true</autoPublish>
 				</configuration>
 			</plugin>
+
+
 
 
 		</plugins>
