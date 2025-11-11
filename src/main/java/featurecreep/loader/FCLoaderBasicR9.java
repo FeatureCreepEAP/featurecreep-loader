@@ -6,7 +6,6 @@ import java.lang.instrument.Instrumentation;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.net.URL;
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -24,20 +23,15 @@ import org.jboss.modules.ResourceLoader;
 
 import featurecreep.loader.eventviewer.EventViewer;
 import featurecreep.loader.filesystem.PhilKatzZip;
+import featurecreep.loader.finder.FileSystemResourceLoader;
 import featurecreep.loader.finder.ModuleLoadingMap;
 import featurecreep.loader.finder.ModuleLoadingMap.ModuleLoadingMapEntry;
 import featurecreep.loader.finder.NeedsFCLoaderBasic;
-import featurecreep.loader.finder.FileSystemResourceLoader;
 import featurecreep.loader.finder.PathResourceLoader;
 import featurecreep.loader.utils.JBMUtilsAccessors;
 
-public class FCLoaderBasicR8 extends ModuleLoader implements FCLoaderBasic  {
+public class FCLoaderBasicR9 extends ModuleLoader implements FCLoaderBasic  {
 
-	public URL fc_file;
-	public boolean debug_mode;
-	public Path[] mod_locations;
-	public Path[] classpath_locations;
-	public Set<String> current_packages_exported = new HashSet<String>();;
 	public ArrayList<ClassTransformer> transformers = new ArrayList<ClassTransformer>();
 	public ArrayList<Module> run_only_modules = new ArrayList<Module>();
 	public ArrayList<Module> modules = new ArrayList<Module>();
@@ -49,9 +43,9 @@ public class FCLoaderBasicR8 extends ModuleLoader implements FCLoaderBasic  {
 	public EventViewer eventvwr = new EventViewer();
 	public ArrayList<String> known_nulls = new ArrayList<String>();
 	public boolean mods_loaded = false;
-	public ExecutionSide side;
 	public ModuleLoadingMap module_loading_map = new ModuleLoadingMap();
 	public ModuleFinder[] finders;
+	public GameProvider provider;
 	
 	/**
 	 * Define a new instance of FCLoaderBasic
@@ -63,24 +57,12 @@ public class FCLoaderBasicR8 extends ModuleLoader implements FCLoaderBasic  {
 	 * @param side Weather its server or client side or some other side
 	 * @param finders The modulefinders. They should implement NeedsFCLoaderBasic if they need access to this
 	 */
-	public FCLoaderBasicR8(Path[] mod_locations, Path[] classpath_locations, String[] current_packages_exported,
-			int threads, boolean debug_mode, ExecutionSide side, ModuleFinder[] finders) { // We will probably add more variables son
-		this(FCLoaderBasic.appendFinders(finders, mod_locations, classpath_locations));
-		this.mod_locations = mod_locations;
-		this.classpath_locations = classpath_locations;
-		this.current_packages_exported.addAll(Arrays.asList(current_packages_exported));
+	public FCLoaderBasicR9(GameProvider provider, int threads) { // We will probably add more variables son
+		this(FCLoaderBasic.getFinders(provider));
 		this.threads = threads;
-		this.debug_mode = debug_mode;
 		if (!this.getDebugMode()) {
 			System.out.println("Debug mode is off");
-		}
-		this.side = side;
-		
-
-
-		
-		
-		
+		}		
 		/*
 		 * try { FileSystemClassPathModuleFinder.class.getDeclaredMethod(
 		 * "addSystemDependencies", ModuleSpec.Builder.class).setAccessible(true); }
@@ -90,12 +72,13 @@ public class FCLoaderBasicR8 extends ModuleLoader implements FCLoaderBasic  {
 		// this.known_nulls.add(this.getFeatureCreepJar().getAbsolutePath()); // Until
 		// we find out why the LINKAGE error exists
 	}
+	
 
 	/**
 	 * Internal Use Only, if you really want to use this you can, but is highly condemned
 	 * @param combinedmodulefinders Should be ALL the module finders
 	 */
-	public FCLoaderBasicR8(ModuleFinder[] combinedmodulefinders) { // We will probably add more variables son
+	public FCLoaderBasicR9(ModuleFinder[] combinedmodulefinders) { // We will probably add more variables son
 		super(combinedmodulefinders);
 		this.finders=combinedmodulefinders;
 		for(ModuleFinder finder:finders) {
@@ -116,49 +99,7 @@ public class FCLoaderBasicR8 extends ModuleLoader implements FCLoaderBasic  {
 		}		
 		
 	}
-	
-	public FCLoaderBasicR8(Path[] mod_locations, Path[] classpath_locations, String[] current_packages_exported,
-			int threads, boolean debug_mode, ExecutionSide side) { // We will probably add more variables son
-			this(mod_locations,classpath_locations,current_packages_exported,threads,debug_mode,side,ModuleLoader.NO_FINDERS);
-	}
-	
-	
-	
-	@Override // DONOT Use
-	public void setFCFile(URL fc_file) {
-		// TODO Auto-generated method stub
-		this.fc_file = fc_file;
-	}
 
-	@Override
-	public URL getFCFile() { // DONOT Use
-		// TODO Auto-generated method stub
-		return fc_file;
-	}
-
-	@Override
-	public void setDebugMode(boolean bool) {
-		// TODO Auto-generated method stub
-		this.debug_mode = bool;
-	}
-
-	@Override
-	public boolean getDebugMode() {
-		// TODO Auto-generated method stub
-		return debug_mode;
-	}
-
-	@Override
-	public Path[] getModulePKZipLocations() {
-		// TODO Auto-generated method stub
-		return mod_locations;
-	}
-
-	@Override
-	public Path[] getClassPathPKZipLocations() {
-		// TODO Auto-generated method stub
-		return classpath_locations;
-	}
 
 	@Override
 	public Set<String> getNeededPackages() {
@@ -166,7 +107,7 @@ public class FCLoaderBasicR8 extends ModuleLoader implements FCLoaderBasic  {
 		Set<String> hash_Set = new HashSet<String>();
 
 		hash_Set.addAll(JBMUtilsAccessors.getJDKPaths());
-		hash_Set.addAll(current_packages_exported);
+		hash_Set.addAll(provider.getNeededPackages());
 
 		return hash_Set;
 	}
@@ -284,7 +225,7 @@ public class FCLoaderBasicR8 extends ModuleLoader implements FCLoaderBasic  {
 	@Override
 	public void addNeededPackages(String[] packages_needed) {
 		// TODO Auto-generated method stub
-		current_packages_exported.addAll(Arrays.asList(packages_needed));
+		this.getNeededPackages().addAll(Arrays.asList(packages_needed));
 	}
 
 	@Override
@@ -355,7 +296,7 @@ public class FCLoaderBasicR8 extends ModuleLoader implements FCLoaderBasic  {
 //	}
 
 	@Override
-	public Instrumentation getInstrumentation() {
+	public Instrumentation getInstrumentationForAgent() {
 		// TODO Auto-generated method stub
 		return this.instrumentation;
 	}
@@ -387,7 +328,7 @@ public class FCLoaderBasicR8 extends ModuleLoader implements FCLoaderBasic  {
 	@Override
 	public ExecutionSide getExecutionSide() {
 		// TODO Auto-generated method stub
-		return side;
+		return provider.getExecutionSide();
 	}
 
 	@Override
@@ -438,6 +379,24 @@ public class FCLoaderBasicR8 extends ModuleLoader implements FCLoaderBasic  {
 		}
 		
 		
+	}
+
+
+	@Override
+	public GameProvider getGameProvider() {
+		// TODO Auto-generated method stub
+		return this.provider;
+	}
+
+
+	@Override
+	public Instrumentation getInstrumentation() {
+		// TODO Auto-generated method stub
+		Instrumentation prov = this.provider.getInstrumentation();
+		if(prov!=null) {return prov;}
+		
+		
+		return instrumentation;
 	}
 
 	

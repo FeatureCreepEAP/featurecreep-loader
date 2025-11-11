@@ -1,10 +1,8 @@
 package featurecreep.loader.filesystem;
 
-import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.io.InputStream;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.nio.file.DirectoryStream;
@@ -12,115 +10,146 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.HashMap;
+import java.util.Collections;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 public class DirectoryReader extends VirtualFileSystem {
+    private final Path rootDirectory;
+    private final List<String> entries = new ArrayList<>();
 
-	public ArrayList<String> entries = new ArrayList<String>();
-	public Map<String, byte[]> map = getMap();
+    public DirectoryReader(File directory) throws IOException {
+        this(directory.toPath());
+    }
 
-	// 构造函数：从指定目录中读取文件
-	public DirectoryReader(File directory) throws IOException {
-		this(directory.toPath());
-	}
+    public DirectoryReader(Path directory) throws IOException {
+        super(directory.toUri());
+        this.rootDirectory = directory;
+        readDirectoryRecursively(directory);
+    }
 
-	// 构造函数：从指定目录中读取文件
-	public DirectoryReader(Path directory) throws IOException {
-		super(directory.toUri());
-		readDirectoryRecursively(directory);
-	}
+    private void readDirectoryRecursively(Path directory) throws IOException {
+        try (DirectoryStream<Path> stream = Files.newDirectoryStream(directory)) {
+            for (Path entry : stream) {
+                String relativePath = rootDirectory.relativize(entry).toString().replace('\\', '/');
+                entries.add(relativePath);
+                
+                if (Files.isDirectory(entry)) {
+                    readDirectoryRecursively(entry);
+                }
+            }
+        }
+    }
 
-	// 递归读取目录的方法
-	public void readDirectoryRecursively(Path directory) throws IOException {
-		try (DirectoryStream<Path> stream = Files.newDirectoryStream(directory)) {
-			for (Path entry : stream) {
-				String entryName = entry.getFileName().toString();
-				entries.add(entryName);
-			}
+    @Override
+    public URL getURLForFile(String file) {
+        try {
+            Path resolved = rootDirectory.resolve(file);
+            return resolved.toUri().toURL();
+        } catch (MalformedURLException e) {
+            e.printStackTrace();
+            return null;
+        }
+    }
+
+    @Override
+    public Map<String, byte[]> getMap() {
+        return new LazyMap();
+    }
+
+    @Override
+    public byte[] get(String file) throws IOException {
+        Path resolved = rootDirectory.resolve(file);
+        if (Files.isDirectory(resolved)) {
+            throw new FileNotFoundException("Is a directory: " + file);
+        }
+        return Files.readAllBytes(resolved);
+    }
+
+    @Override
+    public boolean has(String file) {
+        return entries.contains(file.replace('\\', '/'));
+    }
+
+    @Override
+    public Collection<String> getFilenames(String prefix) {
+        String normalisedPrefix = prefix.replace('\\', '/');
+        return entries.stream()
+                .filter(e -> e.startsWith(normalisedPrefix))
+                .collect(Collectors.toList());
+    }
+
+    private class LazyMap implements Map<String, byte[]> {
+        @Override
+        public int size() {
+            return entries.size();
+        }
+
+        @Override
+        public boolean isEmpty() {
+            return entries.isEmpty();
+        }
+
+        @Override
+        public boolean containsKey(Object key) {
+            return has((String) key);
+        }
+
+        @Override
+        public byte[] get(Object key) {
+            String file = (String) key;
+            Path resolved = rootDirectory.resolve(file);
+			return Files.isDirectory(resolved) ? null : get(file);
+        }
+
+        // Unsupported operations that would require full preload
+        @Override
+        public byte[] put(String key, byte[] value) {
+            throw new UnsupportedOperationException("Read-only filesystem");
+        }
+
+        @Override
+        public byte[] remove(Object key) {
+            throw new UnsupportedOperationException("Read-only filesystem");
+        }
+
+        @Override
+        public void putAll(Map<? extends String, ? extends byte[]> m) {
+            throw new UnsupportedOperationException("Read-only filesystem");
+        }
+
+        @Override
+        public void clear() {
+            throw new UnsupportedOperationException("Read-only filesystem");
+        }
+
+        @Override
+        public Set<String> keySet() {
+            return Collections.unmodifiableSet(
+                entries.stream().collect(Collectors.toSet())
+            );
+        }
+
+        @Override
+        public Collection<byte[]> values() {
+            throw new UnsupportedOperationException(
+                "values() would require loading all files - use get() instead"
+            );
+        }
+
+        @Override
+        public Set<Entry<String, byte[]>> entrySet() {
+            throw new UnsupportedOperationException(
+                "entrySet() would require loading all files - use get() instead"
+            );
+        }
+
+		@Override
+		public boolean containsValue(Object arg0) {
+			// TODO Auto-generated method stub
+			return false;//Unsupported
 		}
-	}
-
-	// 重写getURLForFile方法以处理目录中的文件
-	@Override
-	public URL getURLForFile(String file) {
-		if (getURL() == null) {
-			return null;
-		}
-		// 构建文件的URL
-		try {
-			File fileObj = new File(new File(getURL().getPath()), file);
-			return fileObj.toURI().toURL();
-		} catch (MalformedURLException e) {
-			e.printStackTrace();
-		}
-
-		return getURL();
-	}
-
-	/**
-	 * Avoid when possible
-	 */
-	@Override
-	public Map<String, byte[]> getMap() {
-		// TODO Auto-generated method stub
-		Map<String, byte[]> hash = new HashMap<String, byte[]>();
-		for (String srt : entries) {
-			File fil = new File(srt);
-			if (!srt.endsWith("/")) {
-				// 读取文件内容并存储在map中
-				try (InputStream is = Files.newInputStream(fil.toPath());
-						ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
-
-					byte[] buffer = new byte[4096];
-					int bytesRead;
-					while ((bytesRead = is.read(buffer)) != -1) {
-						baos.write(buffer, 0, bytesRead);
-					}
-					hash.put(srt, baos.toByteArray());
-				} catch (IOException e) {
-					// TODO Auto-generated catch block
-					e.printStackTrace();
-				}
-			} else {
-				// 对于目录，存储引用并递归读取
-				hash.put(srt, null);
-			}
-		}
-
-		return hash;
-	}
-
-	@Override
-	public byte[] get(String file) throws FileNotFoundException, IOException {
-		InputStream is = Files.newInputStream(new File(file).toPath());
-		ByteArrayOutputStream baos = new ByteArrayOutputStream();
-
-		byte[] buffer = new byte[4096];
-		int bytesRead;
-		while ((bytesRead = is.read(buffer)) != -1) {
-			baos.write(buffer, 0, bytesRead);
-		}
-		is.close();
-		return baos.toByteArray();
-
-	}
-	
-	@Override
-	public boolean has(String file) {
-		return entries.contains(file);
-	}
-	
-	@Override
-	public Collection<String> getFilenames(String prefix) {
-		Collection<String> result = new ArrayList<>();
-		for (String entryName : entries) {
-			if (entryName.startsWith(prefix)) {
-				result.add(entryName);
-			}
-		}
-		return result;
-	}
-
-
+    }
 }

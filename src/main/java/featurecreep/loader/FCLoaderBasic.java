@@ -22,8 +22,10 @@ import java.security.ProtectionDomain;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.ServiceLoader;
 import java.util.Set;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
@@ -39,30 +41,39 @@ import org.jboss.modules.ModuleFinder;
 import org.jboss.modules.ModuleIdentifier;
 import org.jboss.modules.ModuleLoader;
 import org.jboss.modules.ModuleSpec;
+import org.jboss.modules.PreMain;
 import org.jboss.modules.Resource;
 
 import featurecreep.loader.eventviewer.EventViewer;
 import featurecreep.loader.filesystem.PhilKatzZip;
 import featurecreep.loader.finder.FCFileSystemClassPathFinder;
+import featurecreep.loader.finder.FileSystemResourceLoader;
 import featurecreep.loader.finder.ModuleLoadingMap;
 import featurecreep.loader.finder.ModuleLoadingMap.ModuleLoadingMapEntry;
-import featurecreep.loader.finder.FileSystemResourceLoader;
 import featurecreep.loader.utils.ArrayCombiner;
 import featurecreep.loader.utils.JBMUtilsAccessors;
 
 public interface FCLoaderBasic {
 
-	public void setFCFile(URL fc_file); // DONOT Use
+	
+	public GameProvider getGameProvider();
 
-	public URL getFCFile(); // DONOT Use
+	public default boolean setDebugMode(boolean val) {
+		return getGameProvider().setDebugMode(val);
+	}
 
-	public void setDebugMode(boolean bool);
+	public default boolean getDebugMode() {
+		return getGameProvider().getDebugMode();
+	}
 
-	public boolean getDebugMode();
 
-	public Path[] getModulePKZipLocations();
+	public default Path[] getModulePKZipLocations() {
+		return getGameProvider().getModulePKZipLocations();
+	}
 
-	public Path[] getClassPathPKZipLocations();
+	public default Path[] getClassPathPKZipLocations() {
+		return getGameProvider().getClassPathPKZipLocations();
+	}
 
 	public FileTypes filetypes = new FileTypes();// Is ok to be static and final
 
@@ -74,7 +85,9 @@ public interface FCLoaderBasic {
 
 	}
 
-	public Set<String> getNeededPackages();
+	public  default Set<String> getNeededPackages(){
+		return this.getGameProvider().getNeededPackages();
+	}
 
 	public default ModuleLoader getLoader() {
 		return getBootModuleLoader();
@@ -101,7 +114,7 @@ public interface FCLoaderBasic {
 			public ModuleLoader run() {
 				final String loaderClass = System.getProperty("boot.module.loader", LocalModuleLoader.class.getName());
 				try {
-					return Class.forName(loaderClass, true, FCLoaderBasicR8.class.getClassLoader())
+					return Class.forName(loaderClass, true, FCLoaderBasic.class.getClassLoader())
 							.asSubclass(ModuleLoader.class).getConstructor().newInstance();
 					// return Class.forName(LocalModuleLoader.class.getName(), true,
 					// FCLoaderBasicR4.class.getClassLoader()).asSubclass(ModuleLoader.class).getConstructor().newInstance();
@@ -131,9 +144,6 @@ public interface FCLoaderBasic {
 		});
 	}
 
-	/**
-	 * Do not rely too much on atm because it may be replaced with ModuleLoadingMap
-	 */
 	public ModuleLoadingMap getModuleLoadingMap();
 
 //	public static InputStream getModuleXMLFromJarAsInputStream(File location) throws IOException {
@@ -244,8 +254,10 @@ public interface FCLoaderBasic {
 		return fils;
 	}
 
+@Deprecated //use game providers	
 	public void addNeededPackages(String[] packages_needed);
 
+@Deprecated //Do not use
 	public default File getFeatureCreepJar() {
 
 		for (File file : getCombinedFiles()) {
@@ -392,13 +404,29 @@ public interface FCLoaderBasic {
 	// public Map<Module, ArrayList<String>> getAgents();
 
 	/**
-	 * Solo usas para Agentes
+	 * Solo usas para Agentes. Usa en GameProvider 
 	 * 
 	 * @param instrument
 	 * @return
 	 */
-	public Instrumentation setInstrumentation(Instrumentation instrument);
+	@Deprecated
+	public default Instrumentation setInstrumentation(Instrumentation instrument) {
+		return this.getGameProvider().setInstrumentation(instrument);
+	}
 
+	
+	/**
+	 * This should be the instrumenations for HotSwapper from loading as an agent.
+	 * @return
+	 */
+	public default Instrumentation getInstrumentationForAgent() {
+		return this.getGameProvider().getInstrumentation();
+	}
+	
+	/**
+	 * Actual Instrumentation. When implemented this should return getInstrumentationForAgent() if it is not null, if not it should create an implementation of FCInstrumentation
+	 * @return
+	 */
 	public Instrumentation getInstrumentation();
 
 	public static ClassTransformer fromClassFileTransformer(ClassFileTransformer transformer) {
@@ -472,13 +500,22 @@ public interface FCLoaderBasic {
 
 				try {
 					methodHandle = lookup.findStatic(mainClass, "premain", PREMAIN_METHOD_TYPE());
-					methodHandle.invokeExact(new String(""), this.getInstrumentation());
+					methodHandle.invokeExact(new String(""), this.getInstrumentationForAgent());
 				} catch (Exception e) {
 					// TODO Auto-generated catch block
 					e.printStackTrace();
 				}
 
 			}
+			
+			ServiceLoader<PreMain> premains = agent.loadService(PreMain.class);
+			for(PreMain premain:premains) {
+				premain.run(new ArrayList<String>());//No Args ATM
+			}
+			
+			
+			
+			
 
 			for (String agent_clazz : early_listeners) {
 
@@ -542,7 +579,7 @@ public interface FCLoaderBasic {
 				try {
 					methodHandleMain = lookup.findStatic(mainClass, "agentmain", PREMAIN_METHOD_TYPE());
 		//TODO: this is a hack to make sure that the instrumentation is set correctly. no args yet    
-					methodHandleMain.invokeExact(new String(""), this.getInstrumentation());
+					methodHandleMain.invokeExact(new String(""), this.getInstrumentationForAgent());
 				} catch (Exception e) {
 					// TODO Auto-generated catch block
 					// e.printStackTrace();
@@ -588,31 +625,47 @@ public interface FCLoaderBasic {
 	
 	public ClassTransformer getMainTransformer();
 
-	/**
-	 * For the constructor only, does not currently readd after definition. You MUST
-	 * define the load field in the constructor
-	 * 
-	 * @param toAdd
-	 * @return
-	 */
-	public static ModuleFinder[] appendFinders(ModuleFinder[] toAdd, Path[] mod_locations, Path[] classpath_locations) {
-		ArrayCombiner<ModuleFinder> combiner = new ArrayCombiner<ModuleFinder>();
-		return combiner.combineArrays(toAdd, findFinders(mod_locations, classpath_locations));
-	}
+
 
 	/**
 	 * Internal, for constructor. You MUST implement NeedsFCLoaderBasic if you need
 	 * access to FCLoaderBasic
 	 * 
-	 * @param mod_locations
-	 * @param classpath_locations
 	 * @return
 	 */
-	public static ModuleFinder[] findFinders(Path[] mod_locations, Path[] classpath_locations) {
+	public static ModuleFinder[] getFinders(GameProvider prov) {
 		// TODO
-		return new ModuleFinder[] { new FCFileSystemClassPathFinder(getBootModuleLoader()) };
-	}
+		
+		List<ModuleFinder> finders = new LinkedList<>();
+		Path[] mod_locations = prov.getModulePKZipLocations();
+		Path[] classpath_locations = prov.getClassPathPKZipLocations();
+	    
+		finders.addAll(prov.getDefaultModuleFinders());
+		
+		
+		// Collect all potential finder sources
+		List<File> finderSources = new ArrayList<>();
+		ModuleFinderDiscovery.collectFinderSources(mod_locations, finderSources);
+		ModuleFinderDiscovery.collectFinderSources(classpath_locations, finderSources);
 
+		// For each source, try to load finders from it
+		for (File source : finderSources) {
+			ModuleFinderDiscovery.loadFindersFromSource(source, finders,getBootModuleLoader());
+		}
+	    
+	    // Add the default finder
+	    finders.add(new FCFileSystemClassPathFinder(getBootModuleLoader()));
+	    	    
+	    
+	    
+	    return finders.toArray(new ModuleFinder[0]);
+	    
+
+		
+		
+	}
+	
+	
 	/*
 	 * This should be run BEFORE any transformers are added
 	 */
@@ -647,7 +700,10 @@ public interface FCLoaderBasic {
 
 	public boolean getModsLoaded();
 
-	public ExecutionSide getExecutionSide();
+	public default ExecutionSide getExecutionSide() {
+		return this.getGameProvider().getExecutionSide();
+	}
+	
 
 	@SuppressWarnings({ "removal", "deprecation" })
 	public default AccessControlContext getContext() {
