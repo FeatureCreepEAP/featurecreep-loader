@@ -38,7 +38,6 @@ import org.jboss.modules.LocalModuleLoader;
 import org.jboss.modules.Module;
 import org.jboss.modules.ModuleDependencySpecBuilder;
 import org.jboss.modules.ModuleFinder;
-import org.jboss.modules.ModuleIdentifier;
 import org.jboss.modules.ModuleLoader;
 import org.jboss.modules.ModuleSpec;
 import org.jboss.modules.PreMain;
@@ -103,10 +102,7 @@ public interface FCLoaderBasic {
 
 	public void runModule(String name);
 
-	@Deprecated
-	public default void runModule(ModuleIdentifier id) {
-		runModule(id.getName());
-	}
+
 
 	public static ModuleLoader getBootModuleLoader() {
 		// TODO Auto-generated method stub
@@ -350,15 +346,6 @@ public interface FCLoaderBasic {
 		return false;
 	}
 
-	@SuppressWarnings("deprecation")
-	public default boolean hasModule(ModuleIdentifier modid) {
-		for (Module mod : this.getModules()) {
-			if (mod.getIdentifier().equals(modid)) {
-				return true;
-			}
-		}
-		return false;
-	}
 
 	public default Module getModule(String name) {
 
@@ -370,16 +357,6 @@ public interface FCLoaderBasic {
 		return null;
 	}
 
-	@SuppressWarnings("deprecation")
-	public default Module getModule(ModuleIdentifier modid) {
-
-		for (Module mod : this.getModules()) {
-			if (mod.getIdentifier().equals(modid)) {
-				return mod;
-			}
-		}
-		return null;
-	}
 
 	public Module loadModule(String name, boolean runnable);
 

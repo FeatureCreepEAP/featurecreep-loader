@@ -124,7 +124,8 @@ public class FCLoaderBasicR9 extends ModuleLoader implements FCLoaderBasic  {
 		System.out.println("Loading Classpath Mods");
 
 		for (int c = 0; c < getClassPathFiles().size(); c++) { // Soon I need to do with XML
-			if (!this.known_nils().contains(getClassPathFiles().get(c).toString())) {
+			String str =getClassPathFiles().get(c).toString();
+			if (!this.known_nils().contains(str)|| !str.endsWith(".nil.jar") || !str.endsWith(".nil")|| !str.endsWith(".deactivation") || !str.endsWith(".disabled") ||!str.endsWith(".rpm")) {
 				
 				File archivo = getClassPathFiles().get(c);
 				this.loadModuleFromFile(archivo, false);
@@ -135,12 +136,13 @@ public class FCLoaderBasicR9 extends ModuleLoader implements FCLoaderBasic  {
 		}
 		System.out.println("Loading Runabble Mods");
 		for (int c = 0; c < getRunOnlyFiles().size(); c++) { // Soon I need to do with XML
-			if (!this.known_nils().contains(getRunOnlyFiles().get(c).toString())) {
-				if (getRunOnlyFiles().get(c).isFile()) {// Temporary until we get folder modules
+			String str=getRunOnlyFiles().get(c).toString();
+			if (!this.known_nils().contains(str)|| !str.endsWith(".nil.jar") || !str.endsWith(".nil")|| !str.endsWith(".deactivation") || !str.endsWith(".disabled") ||!str.endsWith(".rpm")) {
+				//if (getRunOnlyFiles().get(c).isFile()) {// Temporary until we get folder modules
 
 					File archivo = getRunOnlyFiles().get(c);
 					this.loadModuleFromFile(archivo, true);
-				}
+			//	}
 			}
 		}
 		this.combineModuleDepSpecs();// Temp
@@ -360,16 +362,16 @@ public class FCLoaderBasicR9 extends ModuleLoader implements FCLoaderBasic  {
 			String url_as_string = url.toString();
 			//TODO allow for other resource detecters
 			if (file.isFile()) {
-				
+				if(!this.provider.isSuperLoaderModZip(file)) {
 					ResourceLoader rl = new FileSystemResourceLoader(new PhilKatzZip(file.getCanonicalPath()));
 					this.getModuleLoadingMap().put(url_as_string, new ModuleLoadingMapEntry(url_as_string,rl));
-					
+				}
 			}else {
 				//Directory
-				
+				if(!this.provider.isSuperLoaderModFolder(file)) {
 				ResourceLoader rl = new PathResourceLoader(file.getCanonicalPath(), file.toPath(), this.getContext());
 				this.getModuleLoadingMap().put(url_as_string,new ModuleLoadingMapEntry(url_as_string,rl));
-				
+				}
 			}
 		return 	this.loadModule(url_as_string, runnable);
 		} catch (IOException e) {
