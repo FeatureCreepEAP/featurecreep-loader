@@ -10,120 +10,116 @@ import org.jboss.modules.ModuleFinder;
 
 /**
  * This is the App/GameProvider used for giving certain information to the
- * imlpementation of FCLoaderBasic
+ * implementation of FCLoaderBasic.
  */
 public interface GameProvider {
 
 	/**
 	 * Enhanced Logging
 	 * 
-	 * @return
+	 * @return {@code true} if debug mode is enabled, {@code false} otherwise
 	 */
-	public boolean getDebugMode();
+	boolean getDebugMode();
 
 	/**
-	 * Enhanced Logging
+	 * Enables or disables enhanced logging.
 	 * 
-	 * @return
+	 * @param val {@code true} to enable debug mode, {@code false} to disable
+	 * @return the previous debug mode value
 	 */
-	public boolean setDebugMode(boolean val);
+	boolean setDebugMode(boolean val);
 
 	/**
-	 * Folders for mods
+	 * Folders containing mods that should be loaded as modules.
 	 * 
-	 * @return
+	 * @return an array of paths to module-compatible mod JARs or directories
 	 */
-	public Path[] getModulePKZipLocations();
+	Path[] getModulePKZipLocations();
 
 	/**
-	 * Folders to look for mods which are only going to be added to classpath, but
-	 * not run
+	 * Folders to look for mods which are only added to the classpath but not run as
+	 * modules.
 	 * 
-	 * @return
+	 * @return an array of paths to classpath-only mod JARs or directories
 	 */
-	public Path[] getClassPathPKZipLocations();
+	Path[] getClassPathPKZipLocations();
 
 	/**
-	 * This is for replacing the instrumentation if it exists It should only be the
-	 * one from a HotSwappable Agent, if not it should be null, the implementation
-	 * of FCLoaderBasic should make a new FCInstrumentation if this is null.
+	 * Returns the instrumentation instance, if available. This should only be
+	 * non-null if provided by a hot-swappable Java agent. If null, the
+	 * FCLoaderBasic implementation should create a default FCInstrumentation.
 	 * 
-	 * @param instrument
-	 * @return
+	 * @return the instrumentation instance, or {@code null} if not available
 	 */
-	public Instrumentation getInstrumentation();
+	Instrumentation getInstrumentation();
 
 	/**
-	 * This is for replacing the instrumentation if it exists It should only be the
-	 * one from a HotSwappable Agent, if not it should be null, the implementation
-	 * of FCLoaderBasic should make a new FCInstrumentation if this is null.
+	 * Sets the instrumentation instance. This should only be used by a
+	 * hot-swappable Java agent.
 	 * 
-	 * @param instrument
-	 * @return
+	 * @param instrument the instrumentation to set
+	 * @return the previous instrumentation instance
 	 */
-	public Instrumentation setInstrumentation(Instrumentation instrument);
+	Instrumentation setInstrumentation(Instrumentation instrument);
 
 	/**
-	 * These are the packages that will be accessible from the current classloader
-	 * to the Modules Loaded from JBoss Modules. If the packages are not defined
-	 * here a new instance of them will be made if they are loaded by JBoss Modules,
-	 * if they are not loaded by JBoss Modules the contents of these packages will
-	 * not be accessible by the modules in JBoss Modules.
+	 * Returns the set of packages that must be shared between the system class
+	 * loader and JBoss Modules. Packages not listed here may be duplicated or
+	 * become inaccessible to loaded modules.
 	 * 
-	 * @return
+	 * @return a set of fully qualified package names to export
 	 */
-	public Set<String> getNeededPackages();
+	Set<String> getNeededPackages();
 
 	/**
-	 * These are the packages that will be accessible from the current classloader
-	 * to the Modules Loaded from JBoss Modules. If the packages are not defined
-	 * here a new instance of them will be made if they are loaded by JBoss Modules,
-	 * if they are not loaded by JBoss Modules the contents of these packages will
-	 * not be accessible by the modules in JBoss Modules.
+	 * Adds a package to the set of shared packages accessible to JBoss Modules.
 	 * 
-	 * @return
+	 * @param pkg the fully qualified package name to add
 	 */
-	public void addNeededPackage();
+	void addNeededPackage(String pkg);
 
 	/**
-	 * Similar to .nil.jar some Apps have certain extentions to indicate they are
-	 * supposed to be disabled. This can also be impacted by different launchers
+	 * Returns a list of file suffixes that indicate a mod should be skipped.
+	 * Examples: {@code ".nil", ".disabled", ".deactivation"}. This allows launchers
+	 * or environments to disable mods without deletion.
 	 * 
-	 * @return
+	 * @return a list of suffix strings to avoid during mod loading
 	 */
-	public List<String> getAvoidedModSuffixes();
+	List<String> getAvoidedModSuffixes();
 
 	/**
-	 * Execution Side can be things like Client or Server depending on where it is
-	 * being run from
+	 * Returns the execution side (e.g., client or server).
 	 * 
-	 * @return
+	 * @return the current execution side enum value
 	 */
-	public ExecutionSide getExecutionSide();
+	ExecutionSide getExecutionSide();
 
 	/**
-	 * This should be the default module finders to use for looking for mods. It
-	 * should not include those from mods or FCFileSystemClassPathFinder as both of
-	 * these need to be added by the FCLoaderBasicImplementation
+	 * Returns the default module finders used to discover mods. This should not
+	 * include finders for FCFileSystemClassPathFinder or mod-provided finders, as
+	 * those are managed by FCLoaderBasic.
 	 * 
-	 * @return
+	 * @return a list of module finders for core mod discovery
 	 */
-	public List<ModuleFinder> getDefaultModuleFinders();
+	List<ModuleFinder> getDefaultModuleFinders();
 
 	/**
-	 * If the mod is for the Super Loader. If it is it will be skipped from loading.
+	 * Checks whether the given JAR file is a special "super loader" mod that should
+	 * be skipped.
 	 * 
-	 * @param zip
-	 * @return
+	 * @param zip the JAR file to check
+	 * @return {@code true} if the JAR is a super loader mod, {@code false}
+	 *         otherwise
 	 */
-	public boolean isSuperLoaderModZip(File zip);
+	boolean isSuperLoaderModZip(File zip);
 
 	/**
-	 * If the mod is for the Super Loader. If it is it will be skipped from loading.
+	 * Checks whether the given folder is a special "super loader" mod that should
+	 * be skipped.
 	 * 
-	 * @param zip
-	 * @return
+	 * @param folder the directory to check
+	 * @return {@code true} if the folder is a super loader mod, {@code false}
+	 *         otherwise
 	 */
-	public boolean isSuperLoaderModFolder(File folder);
-
+	boolean isSuperLoaderModFolder(File folder);
 }

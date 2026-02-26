@@ -30,14 +30,15 @@ import featurecreep.loader.finder.NeedsFCLoaderBasic;
 import featurecreep.loader.finder.PathResourceLoader;
 import featurecreep.loader.utils.JBMUtilsAccessors;
 
-public class FCLoaderBasicR9 extends ModuleLoader implements FCLoaderBasic  {
+public class FCLoaderBasicR9 extends ModuleLoader implements FCLoaderBasic {
 
 	public ArrayList<ClassTransformer> transformers = new ArrayList<ClassTransformer>();
 	public ArrayList<Module> run_only_modules = new ArrayList<Module>();
 	public ArrayList<Module> modules = new ArrayList<Module>();
 	public int threads;
 	public Map<File, ModuleSpec> custom_root_specs = new HashMap<File, ModuleSpec>();
-	//public Map<Module, ArrayList<String>> agents = new HashMap<Module, ArrayList<String>>();
+	// public Map<Module, ArrayList<String>> agents = new HashMap<Module,
+	// ArrayList<String>>();
 	public Instrumentation instrumentation = new FCInstrumentation(this);
 	public ClassTransformer main_transformer = new FCTransformer(this);
 	public EventViewer eventvwr = new EventViewer();
@@ -46,23 +47,21 @@ public class FCLoaderBasicR9 extends ModuleLoader implements FCLoaderBasic  {
 	public ModuleLoadingMap module_loading_map = new ModuleLoadingMap();
 	public ModuleFinder[] finders;
 	public GameProvider provider;
-	
+
 	/**
-	 * Define a new instance of FCLoaderBasic
-	 * @param mod_locations Folder for Mods to be ran
-	 * @param classpath_locations Folders to search for mods which will not be run
-	 * @param current_packages_exported Packages to Export from ClassPath
-	 * @param threads  How many threads to use
-	 * @param debug_mode   Does more Logging
-	 * @param side Weather its server or client side or some other side
-	 * @param finders The modulefinders. They should implement NeedsFCLoaderBasic if they need access to this
+	 * Constructs a new instance of FCLoaderBasicR9.
+	 *
+	 * @param provider The game provider (e.g., Forge, Fabric, etc.) that supplies environment context
+	 * @param threads  The number of threads to use for parallel operations (currently reserved for future use)
 	 */
 	public FCLoaderBasicR9(GameProvider provider, int threads) { // We will probably add more variables son
 		this(FCLoaderBasic.getFinders(provider));
 		this.threads = threads;
+		this.provider=provider;
+
 		if (!this.getDebugMode()) {
 			System.out.println("Debug mode is off");
-		}		
+		}
 		/*
 		 * try { FileSystemClassPathModuleFinder.class.getDeclaredMethod(
 		 * "addSystemDependencies", ModuleSpec.Builder.class).setAccessible(true); }
@@ -72,22 +71,23 @@ public class FCLoaderBasicR9 extends ModuleLoader implements FCLoaderBasic  {
 		// this.known_nulls.add(this.getFeatureCreepJar().getAbsolutePath()); // Until
 		// we find out why the LINKAGE error exists
 	}
-	
 
 	/**
-	 * Internal Use Only, if you really want to use this you can, but is highly condemned
+	 * Internal Use Only, if you really want to use this you can, but is highly
+	 * condemned
+	 * 
 	 * @param combinedmodulefinders Should be ALL the module finders
 	 */
 	public FCLoaderBasicR9(ModuleFinder[] combinedmodulefinders) { // We will probably add more variables son
 		super(combinedmodulefinders);
-		this.finders=combinedmodulefinders;
-		for(ModuleFinder finder:finders) {
-			
-			if(finder instanceof  NeedsFCLoaderBasic) {
-				NeedsFCLoaderBasic needsfcloaderbasic = (NeedsFCLoaderBasic)finder;
+		this.finders = combinedmodulefinders;
+		for (ModuleFinder finder : finders) {
+
+			if (finder instanceof NeedsFCLoaderBasic) {
+				NeedsFCLoaderBasic needsfcloaderbasic = (NeedsFCLoaderBasic) finder;
 				needsfcloaderbasic.setFCLoaderBasic(this);
 			}
-			
+
 		}
 		try {
 			Field supfinder = ModuleLoader.class.getDeclaredField("finders");
@@ -96,10 +96,9 @@ public class FCLoaderBasicR9 extends ModuleLoader implements FCLoaderBasic  {
 		} catch (NoSuchFieldException | SecurityException | IllegalArgumentException | IllegalAccessException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
-		}		
-		
-	}
+		}
 
+	}
 
 	@Override
 	public Set<String> getNeededPackages() {
@@ -124,25 +123,26 @@ public class FCLoaderBasicR9 extends ModuleLoader implements FCLoaderBasic  {
 		System.out.println("Loading Classpath Mods");
 
 		for (int c = 0; c < getClassPathFiles().size(); c++) { // Soon I need to do with XML
-			String str =getClassPathFiles().get(c).toString();
-			if (!this.known_nils().contains(str)|| !str.endsWith(".nil.jar") || !str.endsWith(".nil")|| !str.endsWith(".deactivation") || !str.endsWith(".disabled") ||!str.endsWith(".rpm")) {
-				
+			String str = getClassPathFiles().get(c).toString();
+			if (!this.known_nils().contains(str) || !str.endsWith(".nil.jar") || !str.endsWith(".nil")
+					|| !str.endsWith(".deactivation") || !str.endsWith(".disabled") || !str.endsWith(".rpm")) {
+
 				File archivo = getClassPathFiles().get(c);
 				this.loadModuleFromFile(archivo, false);
-				
-				
-				
+
 			}
 		}
 		System.out.println("Loading Runabble Mods");
 		for (int c = 0; c < getRunOnlyFiles().size(); c++) { // Soon I need to do with XML
-			String str=getRunOnlyFiles().get(c).toString();
-			if (!this.known_nils().contains(str)|| !str.endsWith(".nil.jar") || !str.endsWith(".nil")|| !str.endsWith(".deactivation") || !str.endsWith(".disabled") ||!str.endsWith(".rpm")) {
-				//if (getRunOnlyFiles().get(c).isFile()) {// Temporary until we get folder modules
+			String str = getRunOnlyFiles().get(c).toString();
+			if (!this.known_nils().contains(str) || !str.endsWith(".nil.jar") || !str.endsWith(".nil")
+					|| !str.endsWith(".deactivation") || !str.endsWith(".disabled") || !str.endsWith(".rpm")) {
+				// if (getRunOnlyFiles().get(c).isFile()) {// Temporary until we get folder
+				// modules
 
-					File archivo = getRunOnlyFiles().get(c);
-					this.loadModuleFromFile(archivo, true);
-			//	}
+				File archivo = getRunOnlyFiles().get(c);
+				this.loadModuleFromFile(archivo, true);
+				// }
 			}
 		}
 		this.combineModuleDepSpecs();// Temp
@@ -163,16 +163,15 @@ public class FCLoaderBasicR9 extends ModuleLoader implements FCLoaderBasic  {
 			String main = JBMUtilsAccessors.getMainClass(getRunModules().get(m));
 			if (main != null && main.length() > 0) {
 				System.out.println(main);
-					try {
-						getRunModules().get(m).run(new String[] { "" });
+				try {
+					getRunModules().get(m).run(new String[] { "" });
 
-					} catch (NoSuchMethodException | InvocationTargetException | ClassNotFoundException e) {
-						// TODO Auto-generated catch block
-						if (this.getDebugMode()) {
-							e.printStackTrace();
-						}
+				} catch (NoSuchMethodException | InvocationTargetException | ClassNotFoundException e) {
+					// TODO Auto-generated catch block
+					if (this.getDebugMode()) {
+						e.printStackTrace();
 					}
-				
+				}
 
 			} else {
 				if (this.getDebugMode()) {
@@ -235,9 +234,8 @@ public class FCLoaderBasicR9 extends ModuleLoader implements FCLoaderBasic  {
 		// TODO Auto-generated method stub
 
 		Module mod = null;
-		
-		
-		//File file = new File(name);
+
+		// File file = new File(name);
 
 //		try {
 //			JarFile jar = new JarFile(file);
@@ -336,14 +334,14 @@ public class FCLoaderBasicR9 extends ModuleLoader implements FCLoaderBasic  {
 	@Override
 	public ClassTransformer setMainTransformer(ClassTransformer transformer) {
 		// TODO Auto-generated method stub
-		this.main_transformer=transformer;
+		this.main_transformer = transformer;
 		return transformer;
 	}
 
 	@Override
 	public Instrumentation setInstrumentation(Instrumentation instrument) {
 		// TODO Auto-generated method stub
-		this.instrumentation=instrument;
+		this.instrumentation = instrument;
 		return instrument;
 	}
 
@@ -356,33 +354,32 @@ public class FCLoaderBasicR9 extends ModuleLoader implements FCLoaderBasic  {
 	@Override
 	public Module loadModuleFromFile(File file, boolean runnable) {
 		// TODO Auto-generated method stub
-		
+
 		try {
 			URL url = file.toURI().toURL();
 			String url_as_string = url.toString();
-			//TODO allow for other resource detecters
+			// TODO allow for other resource detecters
 			if (file.isFile()) {
-				if(!this.provider.isSuperLoaderModZip(file)) {
+				if (!this.provider.isSuperLoaderModZip(file)) {
 					ResourceLoader rl = new FileSystemResourceLoader(new PhilKatzZip(file.getCanonicalPath()));
-					this.getModuleLoadingMap().put(url_as_string, new ModuleLoadingMapEntry(url_as_string,rl));
+					this.getModuleLoadingMap().put(url_as_string, new ModuleLoadingMapEntry(url_as_string, rl));
 				}
-			}else {
-				//Directory
-				if(!this.provider.isSuperLoaderModFolder(file)) {
-				ResourceLoader rl = new PathResourceLoader(file.getCanonicalPath(), file.toPath(), this.getContext());
-				this.getModuleLoadingMap().put(url_as_string,new ModuleLoadingMapEntry(url_as_string,rl));
+			} else {
+				// Directory
+				if (!this.provider.isSuperLoaderModFolder(file)) {
+					ResourceLoader rl = new PathResourceLoader(file.getCanonicalPath(), file.toPath(),
+							this.getContext());
+					this.getModuleLoadingMap().put(url_as_string, new ModuleLoadingMapEntry(url_as_string, rl));
 				}
 			}
-		return 	this.loadModule(url_as_string, runnable);
+			return this.loadModule(url_as_string, runnable);
 		} catch (IOException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 			return null;
 		}
-		
-		
-	}
 
+	}
 
 	@Override
 	public GameProvider getGameProvider() {
@@ -390,21 +387,15 @@ public class FCLoaderBasicR9 extends ModuleLoader implements FCLoaderBasic  {
 		return this.provider;
 	}
 
-
 	@Override
 	public Instrumentation getInstrumentation() {
 		// TODO Auto-generated method stub
 		Instrumentation prov = this.provider.getInstrumentation();
-		if(prov!=null) {return prov;}
-		
-		
+		if (prov != null) {
+			return prov;
+		}
+
 		return instrumentation;
 	}
 
-	
-
-
 }
-
-
-
