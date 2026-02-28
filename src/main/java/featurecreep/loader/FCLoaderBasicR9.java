@@ -62,6 +62,18 @@ public class FCLoaderBasicR9 extends ModuleLoader implements FCLoaderBasic {
 		if (!this.getDebugMode()) {
 			System.out.println("Debug mode is off");
 		}
+		
+	Instrumentation inst =	provider.getInstrumentation();
+	if (inst != null) {
+	    inst.addTransformer(
+	        FCLoaderBasic.fromClassTransformer(
+	           getMainTransformer()
+	        ),
+	        true
+	    );//For transformers added directly from loader
+	}
+		
+		
 		/*
 		 * try { FileSystemClassPathModuleFinder.class.getDeclaredMethod(
 		 * "addSystemDependencies", ModuleSpec.Builder.class).setAccessible(true); }
@@ -78,7 +90,7 @@ public class FCLoaderBasicR9 extends ModuleLoader implements FCLoaderBasic {
 	 * 
 	 * @param combinedmodulefinders Should be ALL the module finders
 	 */
-	public FCLoaderBasicR9(ModuleFinder[] combinedmodulefinders) { // We will probably add more variables son
+	private FCLoaderBasicR9(ModuleFinder[] combinedmodulefinders) { // We will probably add more variables son
 		super(combinedmodulefinders);
 		this.finders = combinedmodulefinders;
 		for (ModuleFinder finder : finders) {
@@ -97,6 +109,8 @@ public class FCLoaderBasicR9 extends ModuleLoader implements FCLoaderBasic {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
+		
+		
 
 	}
 

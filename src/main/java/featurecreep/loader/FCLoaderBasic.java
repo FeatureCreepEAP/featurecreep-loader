@@ -477,7 +477,7 @@ public interface FCLoaderBasic {
 
 				try {
 					methodHandle = lookup.findStatic(mainClass, "premain", PREMAIN_METHOD_TYPE());
-					methodHandle.invokeExact(new String(""), this.getInstrumentationForAgent());
+					methodHandle.invokeExact(new String(""), this.getInstrumentation());
 				} catch (Exception e) {
 					// TODO Auto-generated catch block
 					e.printStackTrace();
@@ -556,7 +556,7 @@ public interface FCLoaderBasic {
 				try {
 					methodHandleMain = lookup.findStatic(mainClass, "agentmain", PREMAIN_METHOD_TYPE());
 		//TODO: this is a hack to make sure that the instrumentation is set correctly. no args yet    
-					methodHandleMain.invokeExact(new String(""), this.getInstrumentationForAgent());
+					methodHandleMain.invokeExact(new String(""), this.getInstrumentation());
 				} catch (Exception e) {
 					// TODO Auto-generated catch block
 					// e.printStackTrace();
