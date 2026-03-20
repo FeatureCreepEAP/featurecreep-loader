@@ -64,6 +64,20 @@ public interface FCLoaderBasic {
 		return getGameProvider().getDebugMode();
 	}
 
+	public boolean isHotswapNeeded();
+
+	/**
+	 * Very important if you want to need transformers
+	 */
+	public default void setupInstrumentation() {
+		Instrumentation inst = this.getGameProvider().getInstrumentation();
+		if (inst != null) {
+			inst.addTransformer(FCLoaderBasic.fromClassTransformer(getMainTransformer()), true);// For transformers
+																								// added directly from
+																								// loader
+		}
+	}
+
 	public default Path[] getModulePKZipLocations() {
 		return getGameProvider().getModulePKZipLocations();
 	}

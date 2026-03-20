@@ -12,6 +12,8 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.jar.Attributes;
+import java.util.jar.JarFile;
 
 import org.jboss.modules.ClassTransformer;
 import org.jboss.modules.Module;
@@ -48,6 +50,8 @@ public class FCLoaderBasicR9 extends ModuleLoader implements FCLoaderBasic {
 	public ModuleFinder[] finders;
 	public GameProvider provider;
 
+	private boolean hotswapNeeded = false;
+
 	/**
 	 * Constructs a new instance of FCLoaderBasicR9.
 	 *
@@ -64,14 +68,6 @@ public class FCLoaderBasicR9 extends ModuleLoader implements FCLoaderBasic {
 		if (!this.getDebugMode()) {
 			System.out.println("Debug mode is off");
 		}
-
-		Instrumentation inst = provider.getInstrumentation();
-		if (inst != null) {
-			inst.addTransformer(FCLoaderBasic.fromClassTransformer(getMainTransformer()), true);// For transformers
-																								// added directly from
-																								// loader
-		}
-
 		/*
 		 * try { FileSystemClassPathModuleFinder.class.getDeclaredMethod(
 		 * "addSystemDependencies", ModuleSpec.Builder.class).setAccessible(true); }
@@ -366,6 +362,11 @@ public class FCLoaderBasicR9 extends ModuleLoader implements FCLoaderBasic {
 		// TODO Auto-generated method stub
 
 		try {
+			// Check for hotswap requirements before loading
+			if (file.isFile()) {
+				checkHotswapManifest(file);
+			}
+
 			URL url = file.toURI().toURL();
 			String url_as_string = url.toString();
 			// TODO allow for other resource detecters
@@ -389,6 +390,42 @@ public class FCLoaderBasicR9 extends ModuleLoader implements FCLoaderBasic {
 			return null;
 		}
 
+	}
+
+	private void checkHotswapManifest(File file) {
+		// Check exclusion: "except for ones which end in .jar and the jar name starts
+		// with featurecreep- or crashdetector"
+		String fileName = file.getName();
+		boolean isExcluded = fileName.endsWith(".jar")
+				&& (fileName.startsWith("featurecreep-") || fileName.startsWith("crashdetector"));
+
+		if (isExcluded) {
+			return;
+		}
+
+		try (JarFile jar = new JarFile(file)) {
+			if (jar.getManifest() != null) {
+				Attributes mainAttributes = jar.getManifest().getMainAttributes();
+				String canRedefine = mainAttributes.getValue("Can-Redefine-Classes");
+				String canRetransform = mainAttributes.getValue("Can-Retransform-Classes");
+
+				if (Boolean.parseBoolean(canRedefine) || Boolean.parseBoolean(canRetransform)) {
+					this.hotswapNeeded = true;
+				}
+			}
+		} catch (IOException e) {
+			// Not a valid JAR or manifest missing, ignore for this check
+			if (this.getDebugMode()) {
+				// Log only if debug mode is on, usually expected for non-jar files
+				// System.out.println("Skipping hotswap check for " + file.getName() + ": " +
+				// e.getMessage());
+			}
+		}
+	}
+
+	@Override
+	public boolean isHotswapNeeded() {
+		return this.hotswapNeeded;
 	}
 
 	@Override
