@@ -10,5 +10,4 @@ public interface EventViewerEvent<T> {
 
 	public void setParams(Object[] params);
 
-
 }

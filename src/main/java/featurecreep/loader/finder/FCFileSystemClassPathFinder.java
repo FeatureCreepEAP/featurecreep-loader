@@ -287,9 +287,6 @@ public class FCFileSystemClassPathFinder extends FileSystemClassPathModuleFinder
 
 		// ModuleSpec spec = load.getCustomRootSpecs().get(builder.getName());
 
-		
-		
-		
 		builder.setClassFileTransformer(load.getMainTransformer());
 
 		LocalLoader lod = JBMUtilsAccessors.getSystemLocalLoader();

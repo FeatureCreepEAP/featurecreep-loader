@@ -28,8 +28,6 @@ import java.security.AccessControlContext;
 
 import org.jboss.modules.Resource;
 
-
-
 /**
  * Java NIO Path-based Resource
  *
@@ -37,41 +35,41 @@ import org.jboss.modules.Resource;
  */
 public class PathResource implements Resource {
 
-    private final Path path;
-    private final String name;
-    private final AccessControlContext context;
+	private final Path path;
+	private final String name;
+	private final AccessControlContext context;
 
-    PathResource(Path path, final String name, AccessControlContext context) {
-        this.path = path;
-        this.name = name;
-        this.context = context;
-    }
+	PathResource(Path path, final String name, AccessControlContext context) {
+		this.path = path;
+		this.name = name;
+		this.context = context;
+	}
 
-    @Override
-    public String getName() {
-        return name;
-    }
+	@Override
+	public String getName() {
+		return name;
+	}
 
-    @Override
-    public URL getURL() {
-        return doPrivilegedIfNeeded(context, () -> {
-            final URL url = path.toUri().toURL();
-            url.openConnection().connect();
-            return url;
-        });
-    }
+	@Override
+	public URL getURL() {
+		return doPrivilegedIfNeeded(context, () -> {
+			final URL url = path.toUri().toURL();
+			url.openConnection().connect();
+			return url;
+		});
+	}
 
-    @Override
-    public InputStream openStream() throws IOException {
-        return doPrivilegedIfNeeded(context, IOException.class, () -> Files.newInputStream(path));
-    }
+	@Override
+	public InputStream openStream() throws IOException {
+		return doPrivilegedIfNeeded(context, IOException.class, () -> Files.newInputStream(path));
+	}
 
-    @Override
-    public long getSize() {
-        try {
-            return doPrivilegedIfNeeded(context, IOException.class, () -> Files.size(path));
-        } catch (IOException e) {
-            return 0;
-        }
-    }
+	@Override
+	public long getSize() {
+		try {
+			return doPrivilegedIfNeeded(context, IOException.class, () -> Files.size(path));
+		} catch (IOException e) {
+			return 0;
+		}
+	}
 }

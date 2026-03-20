@@ -102,33 +102,32 @@ public class ConcreteModuleSpecAccessor {
 	public static Version getVersion(ConcreteModuleSpec moduleSpec) {
 		return moduleSpec.getVersion();
 	}
-	
-	public static ModuleSpec.Builder getBuilder(ConcreteModuleSpec spec){
+
+	public static ModuleSpec.Builder getBuilder(ConcreteModuleSpec spec) {
 		ModuleSpec.Builder builder = ModuleSpec.build(getName(spec));
-		for(DependencySpec dep:getDependencies(spec)) {
+		for (DependencySpec dep : getDependencies(spec)) {
 			builder.addDependency(dep);
 		}
 		builder.setMainClass(getMainClass(spec));
-		
+
 		builder.setAssertionSetting(getAssertionSetting(spec));
-		
-		for(ResourceLoaderSpec rl: getResourceLoaders(spec)) {
+
+		for (ResourceLoaderSpec rl : getResourceLoaders(spec)) {
 			builder.addResourceRoot(rl);
 		}
-		
+
 		builder.setFallbackLoader(getFallbackLoader(spec));
 		builder.setModuleClassLoaderFactory(getModuleClassLoaderFactory(spec));
 		builder.setClassFileTransformer(getClassFileTransformer(spec));
-		for(Map.Entry<String,String> entry: getProperties(spec).entrySet()) {
+		for (Map.Entry<String, String> entry : getProperties(spec).entrySet()) {
 			builder.addProperty(entry.getKey(), entry.getValue());
 		}
-		
+
 		builder.setPermissionCollection(getPermissionCollection(spec));
 		builder.setVersion(getVersion(spec));
-	
-		
+
 		return builder;
-		
+
 	}
 
 }

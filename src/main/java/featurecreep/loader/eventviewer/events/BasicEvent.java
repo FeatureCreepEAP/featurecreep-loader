@@ -2,12 +2,10 @@ package featurecreep.loader.eventviewer.events;
 
 import featurecreep.loader.eventviewer.EventViewerEvent;
 
-public class BasicEvent<T> implements EventViewerEvent<T>{
+public class BasicEvent<T> implements EventViewerEvent<T> {
 
-	
 	public String event_name;
 	public Object[] params;
-
 
 	public BasicEvent(String event_name, Object... params) {
 		this.event_name = event_name;
@@ -33,6 +31,5 @@ public class BasicEvent<T> implements EventViewerEvent<T>{
 	public void setParams(Object[] params) {
 		this.params = params;
 	}
-	
-	
+
 }

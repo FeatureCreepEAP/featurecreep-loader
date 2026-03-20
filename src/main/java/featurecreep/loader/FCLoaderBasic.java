@@ -54,7 +54,6 @@ import featurecreep.loader.utils.JBMUtilsAccessors;
 
 public interface FCLoaderBasic {
 
-	
 	public GameProvider getGameProvider();
 
 	public default boolean setDebugMode(boolean val) {
@@ -64,7 +63,6 @@ public interface FCLoaderBasic {
 	public default boolean getDebugMode() {
 		return getGameProvider().getDebugMode();
 	}
-
 
 	public default Path[] getModulePKZipLocations() {
 		return getGameProvider().getModulePKZipLocations();
@@ -84,7 +82,7 @@ public interface FCLoaderBasic {
 
 	}
 
-	public  default Set<String> getNeededPackages(){
+	public default Set<String> getNeededPackages() {
 		return this.getGameProvider().getNeededPackages();
 	}
 
@@ -101,8 +99,6 @@ public interface FCLoaderBasic {
 	public void runMods();
 
 	public void runModule(String name);
-
-
 
 	public static ModuleLoader getBootModuleLoader() {
 		// TODO Auto-generated method stub
@@ -250,10 +246,10 @@ public interface FCLoaderBasic {
 		return fils;
 	}
 
-@Deprecated //use game providers	
+	@Deprecated // use game providers
 	public void addNeededPackages(String[] packages_needed);
 
-@Deprecated //Do not use
+	@Deprecated // Do not use
 	public default File getFeatureCreepJar() {
 
 		for (File file : getCombinedFiles()) {
@@ -346,7 +342,6 @@ public interface FCLoaderBasic {
 		return false;
 	}
 
-
 	public default Module getModule(String name) {
 
 		for (Module mod : this.getModules()) {
@@ -357,7 +352,6 @@ public interface FCLoaderBasic {
 		return null;
 	}
 
-
 	public Module loadModule(String name, boolean runnable);
 
 	public Module loadModuleFromFile(File file, boolean runnable);
@@ -367,7 +361,8 @@ public interface FCLoaderBasic {
 		URL url = res.getURL();
 		String string = url.toString();
 		try {
-			this.getModuleLoadingMap().put(string, new ModuleLoadingMapEntry(string, new FileSystemResourceLoader(new PhilKatzZip(res.openStream(),res.getURL().toURI()))));
+			this.getModuleLoadingMap().put(string, new ModuleLoadingMapEntry(string,
+					new FileSystemResourceLoader(new PhilKatzZip(res.openStream(), res.getURL().toURI()))));
 		} catch (IOException | URISyntaxException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
@@ -381,7 +376,7 @@ public interface FCLoaderBasic {
 	// public Map<Module, ArrayList<String>> getAgents();
 
 	/**
-	 * Solo usas para Agentes. Usa en GameProvider 
+	 * Solo usas para Agentes. Usa en GameProvider
 	 * 
 	 * @param instrument
 	 * @return
@@ -391,17 +386,20 @@ public interface FCLoaderBasic {
 		return this.getGameProvider().setInstrumentation(instrument);
 	}
 
-	
 	/**
 	 * This should be the instrumenations for HotSwapper from loading as an agent.
+	 * 
 	 * @return
 	 */
 	public default Instrumentation getInstrumentationForAgent() {
 		return this.getGameProvider().getInstrumentation();
 	}
-	
+
 	/**
-	 * Actual Instrumentation. When implemented this should return getInstrumentationForAgent() if it is not null, if not it should create an implementation of FCInstrumentation
+	 * Actual Instrumentation. When implemented this should return
+	 * getInstrumentationForAgent() if it is not null, if not it should create an
+	 * implementation of FCInstrumentation
+	 * 
 	 * @return
 	 */
 	public Instrumentation getInstrumentation();
@@ -484,15 +482,11 @@ public interface FCLoaderBasic {
 				}
 
 			}
-			
+
 			ServiceLoader<PreMain> premains = agent.loadService(PreMain.class);
-			for(PreMain premain:premains) {
-				premain.run(new ArrayList<String>());//No Args ATM
+			for (PreMain premain : premains) {
+				premain.run(new ArrayList<String>());// No Args ATM
 			}
-			
-			
-			
-			
 
 			for (String agent_clazz : early_listeners) {
 
@@ -514,8 +508,6 @@ public interface FCLoaderBasic {
 
 			}
 
-
-
 		} catch (Throwable e) {
 			// TODO Auto-generated catch block
 			if (this.getDebugMode()) {
@@ -527,20 +519,17 @@ public interface FCLoaderBasic {
 
 	}
 
-	
-	//Need to account for main and premain differences, i originally thought they could have been together
+	// Need to account for main and premain differences, i originally thought they
+	// could have been together
 	public default void runAgent(Module agent) {
 
 		String agent_class = agent.getProperty("Agent-Class");
 
 		ArrayList<String> agents = new ArrayList<String>();
 
-	
 		if (agent_class != null) {
 			agents.addAll(Arrays.asList(agent_class.split(",")));
 		}
-
-
 
 		try {
 
@@ -555,7 +544,8 @@ public interface FCLoaderBasic {
 
 				try {
 					methodHandleMain = lookup.findStatic(mainClass, "agentmain", PREMAIN_METHOD_TYPE());
-		//TODO: this is a hack to make sure that the instrumentation is set correctly. no args yet    
+					// TODO: this is a hack to make sure that the instrumentation is set correctly.
+					// no args yet
 					methodHandleMain.invokeExact(new String(""), this.getInstrumentation());
 				} catch (Exception e) {
 					// TODO Auto-generated catch block
@@ -564,45 +554,16 @@ public interface FCLoaderBasic {
 
 			}
 
-	
-
-
-
 		} catch (Throwable e) {
 			// TODO Auto-generated catch block
 			if (this.getDebugMode()) {
 				e.printStackTrace();
 			}
-		} 
+		}
 
 	}
-	
-	
-	
-	
-	
-	
 
-	
-	
-	
-	
-	
-	
-
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
 	public ClassTransformer getMainTransformer();
-
-
 
 	/**
 	 * Internal, for constructor. You MUST implement NeedsFCLoaderBasic if you need
@@ -612,14 +573,13 @@ public interface FCLoaderBasic {
 	 */
 	public static ModuleFinder[] getFinders(GameProvider prov) {
 		// TODO
-		
+
 		List<ModuleFinder> finders = new LinkedList<>();
 		Path[] mod_locations = prov.getModulePKZipLocations();
 		Path[] classpath_locations = prov.getClassPathPKZipLocations();
-	    
+
 		finders.addAll(prov.getDefaultModuleFinders());
-		
-		
+
 		// Collect all potential finder sources
 		List<File> finderSources = new ArrayList<>();
 		ModuleFinderDiscovery.collectFinderSources(mod_locations, finderSources);
@@ -627,22 +587,16 @@ public interface FCLoaderBasic {
 
 		// For each source, try to load finders from it
 		for (File source : finderSources) {
-			ModuleFinderDiscovery.loadFindersFromSource(source, finders,getBootModuleLoader());
+			ModuleFinderDiscovery.loadFindersFromSource(source, finders, getBootModuleLoader());
 		}
-	    
-	    // Add the default finder
-	    finders.add(new FCFileSystemClassPathFinder(getBootModuleLoader()));
-	    	    
-	    
-	    
-	    return finders.toArray(new ModuleFinder[0]);
-	    
 
-		
-		
+		// Add the default finder
+		finders.add(new FCFileSystemClassPathFinder(getBootModuleLoader()));
+
+		return finders.toArray(new ModuleFinder[0]);
+
 	}
-	
-	
+
 	/*
 	 * This should be run BEFORE any transformers are added
 	 */
@@ -680,7 +634,6 @@ public interface FCLoaderBasic {
 	public default ExecutionSide getExecutionSide() {
 		return this.getGameProvider().getExecutionSide();
 	}
-	
 
 	@SuppressWarnings({ "removal", "deprecation" })
 	public default AccessControlContext getContext() {

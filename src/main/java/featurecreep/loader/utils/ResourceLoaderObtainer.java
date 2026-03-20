@@ -12,22 +12,18 @@ import org.jboss.modules.ResourceLoader;
  */
 public class ResourceLoaderObtainer {
 
-	public static ResourceLoader[] getResourceLoaders(Module mod){
+	public static ResourceLoader[] getResourceLoaders(Module mod) {
 		try {
 			ModuleClassLoader loader = mod.getClassLoader();
 			Method rlgetter = loader.getClass().getDeclaredMethod("getResourceLoaders");
 			rlgetter.setAccessible(true);
-			ResourceLoader[] loaders= (ResourceLoader[]) rlgetter.invoke(loader);
-		return loaders;
+			ResourceLoader[] loaders = (ResourceLoader[]) rlgetter.invoke(loader);
+			return loaders;
 		} catch (NoSuchMethodException | SecurityException | IllegalAccessException | InvocationTargetException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
-return null;
+		return null;
 	}
-	
-	
-	
-	
-	
+
 }

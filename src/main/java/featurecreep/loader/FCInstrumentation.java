@@ -13,7 +13,6 @@ import java.util.Set;
 import java.util.jar.JarFile;
 import java.lang.Module;
 
-
 import org.jboss.modules.JLIClassTransformer;
 import org.jboss.modules.ModuleLoadException;
 

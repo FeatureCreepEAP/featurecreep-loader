@@ -5,20 +5,18 @@ import featurecreep.loader.eventviewer.EventViewer;
 import featurecreep.loader.eventviewer.EventViewerEvent;
 import featurecreep.loader.utils.VarargsFunction;
 
-public class VarArgsEventListener<T> implements EventListener<T>{
+public class VarArgsEventListener<T> implements EventListener<T> {
 
 	String event_name;
 	EventViewer eventvwr;
 	VarargsFunction<T> reference;
-	
-	
+
 	public VarArgsEventListener(EventViewer eventvwr, String event_name, VarargsFunction<T> reference) {
-		this.event_name=event_name;
-		this.eventvwr=eventvwr;
-		this.reference=reference;
+		this.event_name = event_name;
+		this.eventvwr = eventvwr;
+		this.reference = reference;
 	}
-	
-	
+
 	@SuppressWarnings("unchecked")
 	@Override
 	public T invoke() throws IncompatibleEventListenerMethodReference {

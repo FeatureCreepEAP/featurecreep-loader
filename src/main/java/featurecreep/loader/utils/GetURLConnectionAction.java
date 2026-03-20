@@ -26,15 +26,15 @@ import java.security.PrivilegedExceptionAction;
 /**
  */
 public class GetURLConnectionAction implements PrivilegedExceptionAction<URLConnection> {
-    private final URL url;
+	private final URL url;
 
-    public GetURLConnectionAction(final URL url) {
-        this.url = url;
-    }
+	public GetURLConnectionAction(final URL url) {
+		this.url = url;
+	}
 
-    public URLConnection run() throws IOException {
-        final URLConnection c = url.openConnection();
-        c.connect();
-        return c;
-    }
+	public URLConnection run() throws IOException {
+		final URLConnection c = url.openConnection();
+		c.connect();
+		return c;
+	}
 }

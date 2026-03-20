@@ -21,6 +21,7 @@ public interface FileSystem {
 
 	/**
 	 * Try to avoid using this as it takes up memory. Use getFileNameInstead
+	 * 
 	 * @return
 	 */
 	public Map<String, byte[]> getMap();

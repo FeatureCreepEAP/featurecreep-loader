@@ -119,7 +119,7 @@ public class ClassPathUtils {
 		}
 		return jarEntries;
 	}
-	
+
 	public static List<String> getFilesFromJarWithoutSwitchingFromSlashToDot(File jarFile) {
 		List<String> jarEntries = new ArrayList<>();
 		try (JarFile jar = new JarFile(jarFile)) {
@@ -174,46 +174,38 @@ public class ClassPathUtils {
 
 		return jarFilesWithPackage;
 	}
-	
-	
-	
-	
-	
-	
-	// 辅助方法，用于获取指定前缀和后缀的所有资源名称  
-	public static List<String> getResourceNames(ClassLoader classLoader, String prefix, String suffix) throws IOException {  
-	    List<String> resourceNames = new ArrayList<>();  
-	    Enumeration<URL> resources = classLoader.getResources(prefix + "*");  
-	    while (resources.hasMoreElements()) {  
-	        URL resourceUrl = resources.nextElement();  
-	        if (resourceUrl.getProtocol().equals("file")) {  
-	            try (DirectoryStream<Path> stream = Files.newDirectoryStream(Paths.get(resourceUrl.toURI()), path -> path.toString().endsWith(suffix))) {  
-	                for (Path file : stream) {  
-	                    resourceNames.add(prefix + file.getFileName().toString());  
-	                }  
-	            } catch (URISyntaxException | NotDirectoryException e) {  
-	                // 忽略非文件协议或不是目录的情况  
-	            }  
-	        } else {  
-	            // 对于非文件协议（如JAR），我们需要使用其他方法来获取资源名称  
-	            // 但由于JAR中的资源名称通常不是通过路径来访问的，我们只需要检查资源的URL字符串  
-	            String urlString = resourceUrl.toString();  
-	            if (urlString.endsWith("!/")) {  
-	                // 移除JAR文件路径和"!/"，只保留资源路径部分  
-	                String resourcePath = urlString.substring(urlString.indexOf("!/") + 2);  
-	                // 假设资源直接位于fci目录下，没有子目录  
-	                if (resourcePath.startsWith(prefix) && resourcePath.endsWith(suffix)) {  
-	                    resourceNames.add(resourcePath);  
-	                }  
-	            }  
-	        }  
-	    }  
-	    return resourceNames;  
+
+	// 辅助方法，用于获取指定前缀和后缀的所有资源名称
+	public static List<String> getResourceNames(ClassLoader classLoader, String prefix, String suffix)
+			throws IOException {
+		List<String> resourceNames = new ArrayList<>();
+		Enumeration<URL> resources = classLoader.getResources(prefix + "*");
+		while (resources.hasMoreElements()) {
+			URL resourceUrl = resources.nextElement();
+			if (resourceUrl.getProtocol().equals("file")) {
+				try (DirectoryStream<Path> stream = Files.newDirectoryStream(Paths.get(resourceUrl.toURI()),
+						path -> path.toString().endsWith(suffix))) {
+					for (Path file : stream) {
+						resourceNames.add(prefix + file.getFileName().toString());
+					}
+				} catch (URISyntaxException | NotDirectoryException e) {
+					// 忽略非文件协议或不是目录的情况
+				}
+			} else {
+				// 对于非文件协议（如JAR），我们需要使用其他方法来获取资源名称
+				// 但由于JAR中的资源名称通常不是通过路径来访问的，我们只需要检查资源的URL字符串
+				String urlString = resourceUrl.toString();
+				if (urlString.endsWith("!/")) {
+					// 移除JAR文件路径和"!/"，只保留资源路径部分
+					String resourcePath = urlString.substring(urlString.indexOf("!/") + 2);
+					// 假设资源直接位于fci目录下，没有子目录
+					if (resourcePath.startsWith(prefix) && resourcePath.endsWith(suffix)) {
+						resourceNames.add(resourcePath);
+					}
+				}
+			}
+		}
+		return resourceNames;
 	}
-	
-	
-	
 
 }
-
-

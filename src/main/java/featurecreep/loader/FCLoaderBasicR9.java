@@ -51,29 +51,27 @@ public class FCLoaderBasicR9 extends ModuleLoader implements FCLoaderBasic {
 	/**
 	 * Constructs a new instance of FCLoaderBasicR9.
 	 *
-	 * @param provider The game provider (e.g., Forge, Fabric, etc.) that supplies environment context
-	 * @param threads  The number of threads to use for parallel operations (currently reserved for future use)
+	 * @param provider The game provider (e.g., Forge, Fabric, etc.) that supplies
+	 *                 environment context
+	 * @param threads  The number of threads to use for parallel operations
+	 *                 (currently reserved for future use)
 	 */
 	public FCLoaderBasicR9(GameProvider provider, int threads) { // We will probably add more variables son
 		this(FCLoaderBasic.getFinders(provider));
 		this.threads = threads;
-		this.provider=provider;
+		this.provider = provider;
 
 		if (!this.getDebugMode()) {
 			System.out.println("Debug mode is off");
 		}
-		
-	Instrumentation inst =	provider.getInstrumentation();
-	if (inst != null) {
-	    inst.addTransformer(
-	        FCLoaderBasic.fromClassTransformer(
-	           getMainTransformer()
-	        ),
-	        true
-	    );//For transformers added directly from loader
-	}
-		
-		
+
+		Instrumentation inst = provider.getInstrumentation();
+		if (inst != null) {
+			inst.addTransformer(FCLoaderBasic.fromClassTransformer(getMainTransformer()), true);// For transformers
+																								// added directly from
+																								// loader
+		}
+
 		/*
 		 * try { FileSystemClassPathModuleFinder.class.getDeclaredMethod(
 		 * "addSystemDependencies", ModuleSpec.Builder.class).setAccessible(true); }
@@ -109,8 +107,6 @@ public class FCLoaderBasicR9 extends ModuleLoader implements FCLoaderBasic {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
-		
-		
 
 	}
 

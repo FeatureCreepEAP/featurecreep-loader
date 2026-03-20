@@ -4,10 +4,8 @@ import featurecreep.loader.eventviewer.listeners.IncompatibleEventListenerMethod
 
 public interface EventListener<T> {
 
-
-	
 	public T invoke() throws IncompatibleEventListenerMethodReference;
 
 	public String getEventName();
-	
+
 }

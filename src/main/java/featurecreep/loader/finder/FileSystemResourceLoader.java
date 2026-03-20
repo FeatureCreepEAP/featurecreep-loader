@@ -52,7 +52,7 @@ import featurecreep.loader.filesystem.PhilKatzZip;
 
 /**
  *
- *For FileSystems except for folders, for folders use PathResourceLoader
+ * For FileSystems except for folders, for folders use PathResourceLoader
  *
  *
  * @author <a href="mailto:david.lloyd@redhat.com">David M. Lloyd</a>
@@ -70,6 +70,7 @@ public class FileSystemResourceLoader extends AbstractResourceLoader implements 
 
 	/**
 	 * Creates a new instance
+	 * 
 	 * @param fs a filesystem to get files from. Should not be a directory
 	 */
 	public FileSystemResourceLoader(final FileSystem fs) {
@@ -89,17 +90,17 @@ public class FileSystemResourceLoader extends AbstractResourceLoader implements 
 			realPath = realPath.substring(0, realPath.length() - 1);
 		this.relativePath = realPath;
 		try {
-		if(fs instanceof PhilKatzZip) {	
-			rootUrl = getJarURI(fs.getURI(), realPath).toURL();
-		}else {
-			rootUrl=fs.getURL();
-		}
+			if (fs instanceof PhilKatzZip) {
+				rootUrl = getJarURI(fs.getURI(), realPath).toURL();
+			} else {
+				rootUrl = fs.getURL();
+			}
 		} catch (URISyntaxException e) {
 			throw new IllegalArgumentException("Invalid root file specified", e);
 		} catch (MalformedURLException e) {
 			throw new IllegalArgumentException("Invalid root file specified", e);
 		}
-		this.fs=fs;
+		this.fs = fs;
 	}
 
 	public static URI getJarURI(final URI original, final String nestedPath) throws URISyntaxException {
@@ -127,55 +128,54 @@ public class FileSystemResourceLoader extends AbstractResourceLoader implements 
 	public synchronized ClassSpec getClassSpec(final String fileName) throws IOException {
 		final ClassSpec spec = new ClassSpec();
 		try {
-		if (fs.get(fileName) == null) {
-			// no such entry
-			return null;
-		}
-		final long size = fs.getFileSize(fileName);
-		try (final InputStream is = getJarEntryStream(fileName)) {
-			if (size == -1) {
-				// size unknown
-				final ByteArrayOutputStream baos = new ByteArrayOutputStream();
-				final byte[] buf = new byte[16384];
-				int res;
-				while ((res = is.read(buf)) > 0) {
-					baos.write(buf, 0, res);
-				}
-				// done
-				CodeSource codeSource = createCodeSource(fileName);
-				baos.close();
-				is.close();
-				spec.setBytes(baos.toByteArray());
-				spec.setCodeSource(codeSource);
-				return spec;
-			} else if (size <= (long) Integer.MAX_VALUE) {
-				final int castSize = (int) size;
-				byte[] bytes = new byte[castSize];
-				int a = 0, res;
-				while ((res = is.read(bytes, a, castSize - a)) > 0) {
-					a += res;
-				}
-				// consume remainder so that cert check doesn't fail in case of wonky JARs
-				while (is.read() != -1) {
-					//
-				}
-				// done
-				CodeSource codeSource = createCodeSource(fileName);
-				is.close();
-				spec.setBytes(bytes);
-				spec.setCodeSource(codeSource);
-				return spec;
-			} else {
-				throw new IOException("Resource is too large to be a valid class file");
+			if (fs.get(fileName) == null) {
+				// no such entry
+				return null;
 			}
-		}
-		
-		}catch (FileNotFoundException e) {
+			final long size = fs.getFileSize(fileName);
+			try (final InputStream is = getJarEntryStream(fileName)) {
+				if (size == -1) {
+					// size unknown
+					final ByteArrayOutputStream baos = new ByteArrayOutputStream();
+					final byte[] buf = new byte[16384];
+					int res;
+					while ((res = is.read(buf)) > 0) {
+						baos.write(buf, 0, res);
+					}
+					// done
+					CodeSource codeSource = createCodeSource(fileName);
+					baos.close();
+					is.close();
+					spec.setBytes(baos.toByteArray());
+					spec.setCodeSource(codeSource);
+					return spec;
+				} else if (size <= (long) Integer.MAX_VALUE) {
+					final int castSize = (int) size;
+					byte[] bytes = new byte[castSize];
+					int a = 0, res;
+					while ((res = is.read(bytes, a, castSize - a)) > 0) {
+						a += res;
+					}
+					// consume remainder so that cert check doesn't fail in case of wonky JARs
+					while (is.read() != -1) {
+						//
+					}
+					// done
+					CodeSource codeSource = createCodeSource(fileName);
+					is.close();
+					spec.setBytes(bytes);
+					spec.setCodeSource(codeSource);
+					return spec;
+				} else {
+					throw new IOException("Resource is too large to be a valid class file");
+				}
+			}
+
+		} catch (FileNotFoundException e) {
 			e.printStackTrace();
-			return null;//I dont think this will happen
+			return null;// I dont think this will happen
 		}
-		
-		
+
 	}
 
 	// this MUST only be called after the input stream is fully read (see
@@ -220,7 +220,9 @@ public class FileSystemResourceLoader extends AbstractResourceLoader implements 
 
 	public Resource getResource(String name) {
 		name = PathUtils.canonicalize(PathUtils.relativize(name));
-		if(!fs.has(name)) {return null;}
+		if (!fs.has(name)) {
+			return null;
+		}
 		return new FileSystemEntryResource(name, relativePath, fs);
 	}
 
@@ -235,7 +237,7 @@ public class FileSystemResourceLoader extends AbstractResourceLoader implements 
 				if (directory == null) {
 					directory = new ArrayList<>();
 					for (String entry : fs.getFilenames(startName)) {
-							directory.add(entry);
+						directory.add(entry);
 					}
 					this.directory = directory;
 				}
@@ -300,11 +302,11 @@ public class FileSystemResourceLoader extends AbstractResourceLoader implements 
 
 	public URI getLocation() {
 		try {
-		if(fs instanceof PhilKatzZip) {	
-			return getJarURI(fs.getURI(), "");
-		}else {
-			return fs.getURI();
-		}
+			if (fs instanceof PhilKatzZip) {
+				return getJarURI(fs.getURI(), "");
+			} else {
+				return fs.getURI();
+			}
 		} catch (URISyntaxException e) {
 			return null;
 		}
