@@ -128,27 +128,32 @@ public class FCLoaderBasicR9 extends ModuleLoader implements FCLoaderBasic {
 		// TODO Auto-generated method stub
 		System.out.println("Loading Classpath Mods");
 
-		for (int c = 0; c < getClassPathFiles().size(); c++) { // Soon I need to do with XML
+		for (int c = 0; c < getClassPathFiles().size(); c++) {
 			String str = getClassPathFiles().get(c).toString();
-			if (!this.known_nils().contains(str) || !str.endsWith(".nil.jar") || !str.endsWith(".nil")
-					|| !str.endsWith(".deactivation") || !str.endsWith(".disabled") || !str.endsWith(".rpm")) {
 
+			// Define the denylist
+			boolean isDisabled = str.endsWith(".nil.jar") || str.endsWith(".nil") || str.endsWith(".deactivation")
+					|| str.endsWith(".disabled") || str.endsWith(".rpm");
+
+			// Load if NOT in denylist AND NOT in known_nils
+			if (!this.known_nils().contains(str) && !isDisabled) {
 				File archivo = getClassPathFiles().get(c);
 				this.loadModuleFromFile(archivo, false);
-
 			}
 		}
-		System.out.println("Loading Runabble Mods");
-		for (int c = 0; c < getRunOnlyFiles().size(); c++) { // Soon I need to do with XML
-			String str = getRunOnlyFiles().get(c).toString();
-			if (!this.known_nils().contains(str) || !str.endsWith(".nil.jar") || !str.endsWith(".nil")
-					|| !str.endsWith(".deactivation") || !str.endsWith(".disabled") || !str.endsWith(".rpm")) {
-				// if (getRunOnlyFiles().get(c).isFile()) {// Temporary until we get folder
-				// modules
 
+		System.out.println("Loading Runabble Mods");
+		for (int c = 0; c < getRunOnlyFiles().size(); c++) {
+			String str = getRunOnlyFiles().get(c).toString();
+
+			// Define the denylist (same as above)
+			boolean isDisabled = str.endsWith(".nil.jar") || str.endsWith(".nil") || str.endsWith(".deactivation")
+					|| str.endsWith(".disabled") || str.endsWith(".rpm");
+
+			// Load if NOT in denylist AND NOT in known_nils
+			if (!this.known_nils().contains(str) && !isDisabled) {
 				File archivo = getRunOnlyFiles().get(c);
 				this.loadModuleFromFile(archivo, true);
-				// }
 			}
 		}
 		this.combineModuleDepSpecs();// Temp
@@ -174,9 +179,9 @@ public class FCLoaderBasicR9 extends ModuleLoader implements FCLoaderBasic {
 
 				} catch (NoSuchMethodException | InvocationTargetException | ClassNotFoundException e) {
 					// TODO Auto-generated catch block
-					if (this.getDebugMode()) {
+				//	if (this.getDebugMode()) {
 						e.printStackTrace();
-					}
+					//}
 				}
 
 			} else {
@@ -266,8 +271,14 @@ public class FCLoaderBasicR9 extends ModuleLoader implements FCLoaderBasic {
 //		}
 
 		try {
+			System.out.println("In Load Mod Method for "+name);
+			if(this.getModuleLoadingMap().containsKey(name)) {
 			mod = getLoader().loadModule(name);
-//			if (agent != null) {
+			System.out.println(mod.getName() + " sucessfully loaded");
+			}else {
+				System.out.println("Mod is not in map so will not be loaded: "+name);
+			}
+			//			if (agent != null) {
 //				this.agents.put(mod, agent);
 //			}
 
@@ -359,37 +370,53 @@ public class FCLoaderBasicR9 extends ModuleLoader implements FCLoaderBasic {
 
 	@Override
 	public Module loadModuleFromFile(File file, boolean runnable) {
-		// TODO Auto-generated method stub
+	    // TODO Auto-generated method stub
+	    try {
+	        // Check for hotswap requirements before loading
+	        if (file.isFile()) {
+	            checkHotswapManifest(file);
+	        }
 
-		try {
-			// Check for hotswap requirements before loading
-			if (file.isFile()) {
-				checkHotswapManifest(file);
-			}
+	        URL url = file.toURI().toURL();
+	        String url_as_string = url.toString();
+	        System.out.println("Loading Module From File " + url_as_string);
 
-			URL url = file.toURI().toURL();
-			String url_as_string = url.toString();
-			// TODO allow for other resource detecters
-			if (file.isFile()) {
-				if (!this.provider.isSuperLoaderModZip(file)) {
-					ResourceLoader rl = new FileSystemResourceLoader(new PhilKatzZip(file.getCanonicalPath()));
-					this.getModuleLoadingMap().put(url_as_string, new ModuleLoadingMapEntry(url_as_string, rl));
-				}
-			} else {
-				// Directory
-				if (!this.provider.isSuperLoaderModFolder(file)) {
-					ResourceLoader rl = new PathResourceLoader(file.getCanonicalPath(), file.toPath(),
-							this.getContext());
-					this.getModuleLoadingMap().put(url_as_string, new ModuleLoadingMapEntry(url_as_string, rl));
-				}
-			}
-			return this.loadModule(url_as_string, runnable);
-		} catch (IOException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-			return null;
-		}
+	        // TODO allow for other resource detecters
+	        if (file.isFile()) {
+	            // LOGIC: If the SuperLoader (Forge/Fabric) did NOT claim this file, we load it.
+	            // This allows .fpm, .jar, or any other extension to be loaded as a generic mod.
+	            if (!this.provider.isSuperLoaderModZip(file)) {
+	    	        System.out.println("Loading Module From File " + url_as_string);
 
+	            	ResourceLoader rl = new FileSystemResourceLoader(new PhilKatzZip(file.getCanonicalPath()));
+	                this.getModuleLoadingMap().put(url_as_string, new ModuleLoadingMapEntry(url_as_string, rl));
+	            }else {
+	            	System.out.println("Is Super, will not be loaded");
+	            }
+
+	        } else {
+	            // Directory handling
+//	            if (!this.provider.isSuperLoaderModFolder(file)) {
+//	                ResourceLoader rl = new PathResourceLoader(file.getCanonicalPath(), file.toPath(),
+//	                        this.getContext());
+//	                this.getModuleLoadingMap().put(url_as_string, new ModuleLoadingMapEntry(url_as_string, rl));
+//	            }
+	        }
+	    
+	        
+	        if (file.isFile()) {//TODO Reallow folders
+	        return this.loadModule(url_as_string, runnable);
+	        }else {
+	        	return null;
+	        }
+	    
+	    
+	    
+	    } catch (IOException e) {
+	        // TODO Auto-generated catch block
+	        e.printStackTrace();
+	        return null;
+	    }
 	}
 
 	private void checkHotswapManifest(File file) {
@@ -397,7 +424,7 @@ public class FCLoaderBasicR9 extends ModuleLoader implements FCLoaderBasic {
 		// with featurecreep- or crashdetector"
 		String fileName = file.getName();
 		boolean isExcluded = fileName.endsWith(".jar")
-				&& (fileName.startsWith("featurecreep-") || fileName.startsWith("crashdetector"));
+				&& (fileName.startsWith("featurecreep") || fileName.startsWith("crashdetector"));
 
 		if (isExcluded) {
 			return;
@@ -410,6 +437,7 @@ public class FCLoaderBasicR9 extends ModuleLoader implements FCLoaderBasic {
 				String canRetransform = mainAttributes.getValue("Can-Retransform-Classes");
 
 				if (Boolean.parseBoolean(canRedefine) || Boolean.parseBoolean(canRetransform)) {
+				System.out.println("This needs redefine" + file.getName());
 					this.hotswapNeeded = true;
 				}
 			}
