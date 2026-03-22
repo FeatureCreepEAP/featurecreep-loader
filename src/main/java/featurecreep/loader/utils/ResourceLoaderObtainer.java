@@ -15,11 +15,14 @@ public class ResourceLoaderObtainer {
 	public static ResourceLoader[] getResourceLoaders(Module mod) {
 		try {
 			ModuleClassLoader loader = mod.getClassLoader();
-			Method rlgetter = loader.getClass().getDeclaredMethod("getResourceLoaders");
+			Method rlgetter = Class.forName("org.jboss.modules.ModuleClassLoader").getDeclaredMethod("getResourceLoaders");
 			rlgetter.setAccessible(true);
 			ResourceLoader[] loaders = (ResourceLoader[]) rlgetter.invoke(loader);
 			return loaders;
 		} catch (NoSuchMethodException | SecurityException | IllegalAccessException | InvocationTargetException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} catch (ClassNotFoundException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
