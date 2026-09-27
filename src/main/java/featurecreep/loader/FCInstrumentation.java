@@ -33,8 +33,7 @@ public class FCInstrumentation implements Instrumentation {
 
 	@Override
 	public void addTransformer(ClassFileTransformer transformer) {
-		// TODO Auto-generated method stub
-		this.addTransformer(transformer);
+		loader.addTransformer(transformer);
 	}
 
 	@Override
@@ -78,13 +77,13 @@ public class FCInstrumentation implements Instrumentation {
 	}
 
 	@Override
-	public Class[] getAllLoadedClasses() {
+	public Class<?>[] getAllLoadedClasses() {
 		// TODO Auto-generated method stub
 		return null; // Not Yet TM
 	}
 
 	@Override
-	public Class[] getInitiatedClasses(ClassLoader loader) {
+	public Class<?>[] getInitiatedClasses(ClassLoader loader) {
 		// TODO Auto-generated method stub
 		return null; // Not Yet TM
 	}

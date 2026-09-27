@@ -17,14 +17,11 @@
  */
 package featurecreep.loader.finder;
 
-import static featurecreep.loader.finder.PathResourceLoader.doPrivilegedIfNeeded;
-
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.security.AccessControlContext;
 
 import org.jboss.modules.Resource;
 
@@ -37,12 +34,9 @@ public class PathResource implements Resource {
 
 	private final Path path;
 	private final String name;
-	private final AccessControlContext context;
-
-	PathResource(Path path, final String name, AccessControlContext context) {
+	PathResource(Path path, final String name) {
 		this.path = path;
 		this.name = name;
-		this.context = context;
 	}
 
 	@Override
@@ -52,22 +46,22 @@ public class PathResource implements Resource {
 
 	@Override
 	public URL getURL() {
-		return doPrivilegedIfNeeded(context, () -> {
-			final URL url = path.toUri().toURL();
-			url.openConnection().connect();
-			return url;
-		});
+		try {
+			return path.toUri().toURL();
+		} catch (java.net.MalformedURLException e) {
+			throw new IllegalStateException("Invalid resource path: " + path, e);
+		}
 	}
 
 	@Override
 	public InputStream openStream() throws IOException {
-		return doPrivilegedIfNeeded(context, IOException.class, () -> Files.newInputStream(path));
+		return Files.newInputStream(path);
 	}
 
 	@Override
 	public long getSize() {
 		try {
-			return doPrivilegedIfNeeded(context, IOException.class, () -> Files.size(path));
+			return Files.size(path);
 		} catch (IOException e) {
 			return 0;
 		}

@@ -1,150 +1,159 @@
-<project xmlns="http://maven.apache.org/POM/4.0.0"
-	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
-	<modelVersion>4.0.0</modelVersion>
-	<groupId>com.asbestosstar</groupId>
-	<artifactId>featurecreep-loader</artifactId>
-	<version>6.0.0-am3</version>
-	<properties>
-		<maven.compiler.target>11</maven.compiler.target>
-		<maven.compiler.source>11</maven.compiler.source>
-	</properties>
-	
-	
-	
-	
-	<dependencies>
-		<dependency>
-			<groupId>org.jboss.modules</groupId>
-			<artifactId>jboss-modules</artifactId>
-			<version>2.2.0.Final</version>
-		</dependency>
-
-
-		<!-- 可能需要添加其他与 Java 11 相关的依赖或插件 -->
-	</dependencies>
-	
-	
-	
-
-
-	<!-- Add necessary metadata for Maven Central -->
-	<name>featurecreep-loader</name>
-	<description>JBoss Modules Based Modloader for loading modules into JVM
+<?xml version='1.0' encoding='UTF-8'?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>com.asbestosstar</groupId>
+  <artifactId>featurecreep-loader</artifactId>
+  <version>12</version>
+  <properties>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+    <maven.compiler.release>11</maven.compiler.release>
+    <junit.version>5.11.4</junit.version>
+    <maven.deploy.skip>true</maven.deploy.skip>
+  </properties>
+  <dependencies>
+    <dependency>
+      <groupId>org.jboss.modules</groupId>
+      <artifactId>jboss-modules</artifactId>
+      <version>2.3.0</version>
+    </dependency>
+    <!-- 可能需要添加其他与 Java 11 相关的依赖或插件 -->
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <version>${junit.version}</version>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+  <!-- Add necessary metadata for Maven Central -->
+  <name>featurecreep-loader</name>
+  <description>JBoss Modules Based Modloader for loading modules into JVM
 		based applications.</description>
-	<url>https://pagure.io/featurecreep/featurecreep-loader</url>
-
-	<licenses>
-		<license>
-			<name>The Unlicense</name>
-			<url>https://unlicense.org/</url>
-		</license>
-	</licenses>
-
-	<developers>
-		<developer>
-			<name>Asbestosstar</name>
-			<email>asbestosstar@asbestosstar.com</email>
-			<organization>Asbestosstar</organization>
-			<organizationUrl>https://asbestosstar.com</organizationUrl>
-		</developer>
-	</developers>
-
-	<scm>
-		<connection>
+  <url>https://pagure.io/featurecreep/featurecreep-loader</url>
+  <licenses>
+    <license>
+      <name>The Unlicense</name>
+      <url>https://unlicense.org/</url>
+    </license>
+  </licenses>
+  <developers>
+    <developer>
+      <name>Asbestosstar</name>
+      <email>asbestosstar@asbestosstar.com</email>
+      <organization>Asbestosstar</organization>
+      <organizationUrl>https://asbestosstar.com</organizationUrl>
+    </developer>
+  </developers>
+  <scm>
+    <connection>
 			scm:git:https://pagure.io/featurecreep/featurecreep-loader.git</connection>
-		<developerConnection>
+    <developerConnection>
 			scm:git:ssh://git@pagure.io/featurecreep/featurecreep-loader.git</developerConnection>
-		<url>https://pagure.io/featurecreep/featurecreep-loader</url>
-	</scm>
-
-	<!-- Distribution Management -->
-	<distributionManagement>
-		<snapshotRepository>
-			<id>central</id>
-			<url>https://central.sonatype.org/</url>
-		</snapshotRepository>
-		<repository>
-			<id>central</id>
-			<url>
+    <url>https://pagure.io/featurecreep/featurecreep-loader</url>
+  </scm>
+  <!-- Distribution Management -->
+  <distributionManagement>
+    <snapshotRepository>
+      <id>central</id>
+      <url>https://central.sonatype.org/</url>
+    </snapshotRepository>
+    <repository>
+      <id>central</id>
+      <url>
 				https://central.sonatype.org/</url>
-		</repository>
-	</distributionManagement>
-
-
-	<build>
-		<plugins>
-			<plugin>
-				<groupId>org.apache.maven.plugins</groupId>
-				<artifactId>maven-compiler-plugin</artifactId>
-				<version>3.8.1</version> <!-- 使用合适的版本 -->
-				<configuration>
-					<source>11</source>
-					<target>11</target>
-				</configuration>
-			</plugin>
-
-
-			<plugin>
-				<groupId>org.apache.maven.plugins</groupId>
-				<artifactId>maven-source-plugin</artifactId>
-				<version>3.2.1</version>
-				<executions>
-					<execution>
-						<id>attach-sources</id>
-						<goals>
-							<goal>jar-no-fork</goal>
-						</goals>
-					</execution>
-				</executions>
-			</plugin>
-
-			<!-- Maven Javadoc Plugin -->
-			<plugin>
-				<groupId>org.apache.maven.plugins</groupId>
-				<artifactId>maven-javadoc-plugin</artifactId>
-				<version>3.4.0</version>
-				<executions>
-					<execution>
-						<id>attach-javadocs</id>
-						<goals>
-							<goal>jar</goal>
-						</goals>
-					</execution>
-				</executions>
-			</plugin>
-
-			<!-- Maven GPG Plugin -->
-			<plugin>
-				<groupId>org.apache.maven.plugins</groupId>
-				<artifactId>maven-gpg-plugin</artifactId>
-				<version>3.0.1</version>
-				<executions>
-					<execution>
-						<id>sign-artifacts</id>
-						<phase>package</phase>
-						<goals>
-							<goal>sign</goal>
-						</goals>
-					</execution>
-				</executions>
-			</plugin>
-
-			<!-- Nexus Staging Maven Plugin -->
-			<plugin>
-				<groupId>org.sonatype.central</groupId>
-				<artifactId>central-publishing-maven-plugin</artifactId>
-				<version>0.7.0</version>
-				<extensions>true</extensions>
-				<configuration>
-					<publishingServerId>central</publishingServerId>
-					<autoPublish>true</autoPublish>
-				</configuration>
-			</plugin>
-
-
-
-
-		</plugins>
-	</build>
+    </repository>
+  </distributionManagement>
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <version>3.8.1</version>
+        <!-- 使用合适的版本 -->
+        <configuration>
+          <release>${maven.compiler.release}</release>
+          <encoding>${project.build.sourceEncoding}</encoding>
+          <showWarnings>true</showWarnings>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <version>3.5.2</version>
+        <configuration>
+          <useModulePath>false</useModulePath>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-source-plugin</artifactId>
+        <version>3.2.1</version>
+        <executions>
+          <execution>
+            <id>attach-sources</id>
+            <goals>
+              <goal>jar-no-fork</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+      <!-- Maven Javadoc Plugin -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-javadoc-plugin</artifactId>
+        <version>3.4.0</version>
+        <configuration>
+          <encoding>${project.build.sourceEncoding}</encoding>
+          <docencoding>${project.reporting.outputEncoding}</docencoding>
+          <doclint>all,-missing</doclint>
+        </configuration>
+        <executions>
+          <execution>
+            <id>attach-javadocs</id>
+            <goals>
+              <goal>jar</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+      <!-- Maven GPG Plugin -->
+      <!-- Nexus Staging Maven Plugin -->
+    </plugins>
+  </build>
+  <profiles>
+    <profile>
+      <id>central-release</id>
+      <properties>
+        <maven.deploy.skip>false</maven.deploy.skip>
+      </properties>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-gpg-plugin</artifactId>
+            <version>3.0.1</version>
+            <executions>
+              <execution>
+                <id>sign-artifacts</id>
+                <phase>verify</phase>
+                <goals>
+                  <goal>sign</goal>
+                </goals>
+              </execution>
+            </executions>
+          </plugin>
+          <plugin>
+            <groupId>org.sonatype.central</groupId>
+            <artifactId>central-publishing-maven-plugin</artifactId>
+            <version>0.7.0</version>
+            <extensions>true</extensions>
+            <configuration>
+              <publishingServerId>central</publishingServerId>
+              <autoPublish>true</autoPublish>
+            </configuration>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+  </profiles>
 </project>

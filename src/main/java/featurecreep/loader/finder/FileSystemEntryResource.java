@@ -27,84 +27,84 @@ import org.jboss.modules.Resource;
 
 import featurecreep.loader.filesystem.FileSystem;
 
+/** A resource view over a FeatureCreep {@link FileSystem}. */
 public class FileSystemEntryResource implements Resource {
-	private final String relativePath;
-	private String entryName;
-	public String nonMultiReleaseName;
-	public FileSystem fs;
+    private final String relativePath;
+    private final String entryName;
+    private final String fullEntryName;
+    public final String nonMultiReleaseName;
+    public final FileSystem fs;
 
-	/**
-	 * Constructs a new PKZipEntryResource.
-	 *
-	 * @param name                     the name of the resource. It will be turned
-	 *                                 into a multirelease file by default
-	 * @param relativePath             the relative path inside the JAR
-	 * @param multi_release_entry_name Should convert the entry to the multi release
-	 *                                 name;
-	 */
-	public FileSystemEntryResource(final String name, final String relativePath, FileSystem fs,
-			boolean multi_release_entry_name) {
-		this.relativePath = relativePath;
-		this.entryName = relativePath == null ? name : name.substring(relativePath.length() + 1);
-		this.nonMultiReleaseName = entryName;
-		try {
-			this.entryName = fs.getMultiReleaseName(entryName);
-		} catch (FileNotFoundException e) {
-			// TODO Auto-generated catch block
-			// e.printStackTrace();
-		}
-		this.fs = fs;
-	}
+    /**
+     * @param name full path of the base resource in the underlying file system
+     * @param relativePath optional resource-root prefix; hidden from getName()
+     * @param multiRelease resolve META-INF/versions/&lt;runtime&gt; overrides
+     */
+    public FileSystemEntryResource(final String name, final String relativePath, FileSystem fs,
+            boolean multiRelease) {
+        this.relativePath = relativePath;
+        this.fs = fs;
 
-	/**
-	 * Constructs a new PKZipEntryResource.
-	 *
-	 * @param name         the name of the resource. It will be turned into a
-	 *                     multirelease file by default
-	 * @param relativePath the relative path inside the JAR
-	 */
-	public FileSystemEntryResource(final String name, final String relativePath, FileSystem fs) {
-		this(name, relativePath, fs, true);
-	}
+        String visible = name;
+        if (relativePath != null && !relativePath.isEmpty() && name.startsWith(relativePath + "/")) {
+            visible = name.substring(relativePath.length() + 1);
+        }
+        this.entryName = visible;
+        this.nonMultiReleaseName = visible;
 
-	@Override
-	public String getName() {
-		return entryName;
-	}
+        String resolved = name;
+        if (multiRelease) {
+            try {
+                // Resolve using the *full* path. For a resource root "lib", the
+                // versioned JAR entry is META-INF/versions/N/lib/Foo.class, not
+                // lib/META-INF/versions/N/Foo.class.
+                resolved = fs.getMultiReleaseName(name);
+            } catch (FileNotFoundException ignored) {
+                // Keep the base path; exists() lets the caller reject it cleanly.
+            }
+        }
+        this.fullEntryName = resolved;
+    }
 
-	@Override
-	public URL getURL() {
-		return fs.getURLForFile(entryName);
-	}
+    public FileSystemEntryResource(final String name, final String relativePath, FileSystem fs) {
+        this(name, relativePath, fs, true);
+    }
 
-	public URL getZipURL() {
-		return fs.getURL();
-	}
+    @Override
+    public String getName() {
+        // Resource names should remain the logical/base name even when bytes come
+        // from a multi-release override.
+        return entryName;
+    }
 
-	@Override
-	public InputStream openStream() throws IOException {
-		try {
-			return fs.getStream(getFullEntryName());
-		} catch (IOException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
-		return null;// I dont think this will ever happen
-	}
+    @Override
+    public URL getURL() {
+        return fs.getURLForFile(fullEntryName);
+    }
 
-	@Override
-	public long getSize() {
-		try {
-			return fs.getFileSize(getFullEntryName());
-		} catch (IOException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
-		return 0;// I dont think this will ever happen
-	}
+    public URL getZipURL() {
+        return fs.getURL();
+    }
 
-	private String getFullEntryName() {
-		return relativePath == null ? entryName : relativePath + "/" + entryName;
-	}
+    @Override
+    public InputStream openStream() throws IOException {
+        return fs.getStream(fullEntryName);
+    }
 
+    @Override
+    public long getSize() {
+        try {
+            return fs.getFileSize(fullEntryName);
+        } catch (IOException e) {
+            return 0;
+        }
+    }
+
+    boolean exists() {
+        return fs.has(fullEntryName);
+    }
+
+    String getFullEntryName() {
+        return fullEntryName;
+    }
 }

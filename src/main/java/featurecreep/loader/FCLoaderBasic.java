@@ -15,9 +15,6 @@ import java.net.URISyntaxException;
 import java.net.URL;
 import java.nio.ByteBuffer;
 import java.nio.file.Path;
-import java.security.AccessControlContext;
-import java.security.AccessController;
-import java.security.PrivilegedAction;
 import java.security.ProtectionDomain;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -32,11 +29,9 @@ import java.util.jar.JarFile;
 import java.util.zip.ZipInputStream;
 
 import org.jboss.modules.ClassTransformer;
-import org.jboss.modules.DependencySpec;
 import org.jboss.modules.JLIClassTransformer;
 import org.jboss.modules.LocalModuleLoader;
 import org.jboss.modules.Module;
-import org.jboss.modules.ModuleDependencySpecBuilder;
 import org.jboss.modules.ModuleFinder;
 import org.jboss.modules.ModuleLoader;
 import org.jboss.modules.ModuleSpec;
@@ -50,7 +45,6 @@ import featurecreep.loader.finder.FileSystemResourceLoader;
 import featurecreep.loader.finder.ModuleLoadingMap;
 import featurecreep.loader.finder.ModuleLoadingMap.ModuleLoadingMapEntry;
 import featurecreep.loader.utils.ArrayCombiner;
-import featurecreep.loader.utils.JBMUtilsAccessors;
 
 public interface FCLoaderBasic {
 
@@ -115,39 +109,24 @@ public interface FCLoaderBasic {
 	public void runModule(String name);
 
 	public static ModuleLoader getBootModuleLoader() {
-		// TODO Auto-generated method stub
-		return AccessController.doPrivileged(new PrivilegedAction<ModuleLoader>() {
-			public ModuleLoader run() {
-				final String loaderClass = System.getProperty("boot.module.loader", LocalModuleLoader.class.getName());
-				try {
-					return Class.forName(loaderClass, true, FCLoaderBasic.class.getClassLoader())
-							.asSubclass(ModuleLoader.class).getConstructor().newInstance();
-					// return Class.forName(LocalModuleLoader.class.getName(), true,
-					// FCLoaderBasicR4.class.getClassLoader()).asSubclass(ModuleLoader.class).getConstructor().newInstance();
-					// return Class.forName(LocalModuleLoader.class.getName(), true,
-					// FCLoaderBasicR4.class.getClassLoader()).asSubclass(ModuleLoader.class).getConstructor().newInstance();
-
-				} catch (InstantiationException e) {
-					throw new InstantiationError(e.getMessage());
-				} catch (IllegalAccessException e) {
-					throw new IllegalAccessError(e.getMessage());
-				} catch (InvocationTargetException e) {
-					try {
-						throw e.getCause();
-					} catch (RuntimeException cause) {
-						throw cause;
-					} catch (Error cause) {
-						throw cause;
-					} catch (Throwable t) {
-						throw new Error(t);
-					}
-				} catch (NoSuchMethodException e) {
-					throw new NoSuchMethodError(e.getMessage());
-				} catch (ClassNotFoundException e) {
-					throw new NoClassDefFoundError(e.getMessage());
-				}
-			}
-		});
+		final String loaderClass = System.getProperty("boot.module.loader", LocalModuleLoader.class.getName());
+		try {
+			return Class.forName(loaderClass, true, FCLoaderBasic.class.getClassLoader())
+					.asSubclass(ModuleLoader.class).getConstructor().newInstance();
+		} catch (InstantiationException e) {
+			throw new InstantiationError(e.getMessage());
+		} catch (IllegalAccessException e) {
+			throw new IllegalAccessError(e.getMessage());
+		} catch (InvocationTargetException e) {
+			Throwable cause = e.getCause();
+			if (cause instanceof RuntimeException) throw (RuntimeException) cause;
+			if (cause instanceof Error) throw (Error) cause;
+			throw new Error(cause);
+		} catch (NoSuchMethodException e) {
+			throw new NoSuchMethodError(e.getMessage());
+		} catch (ClassNotFoundException e) {
+			throw new NoClassDefFoundError(e.getMessage());
+		}
 	}
 
 	public ModuleLoadingMap getModuleLoadingMap();
@@ -258,24 +237,6 @@ public interface FCLoaderBasic {
 		}
 
 		return fils;
-	}
-
-	@Deprecated // use game providers
-	public void addNeededPackages(String[] packages_needed);
-
-	@Deprecated // Do not use
-	public default File getFeatureCreepJar() {
-
-		for (File file : getCombinedFiles()) {
-			if (isFilePKZipCompatible(file)) {
-				if (pkZipHasFile("featurecreep/loader/FCLoaderBasic.class", file)) {
-					return file;
-
-				}
-			}
-
-		}
-		return null; // TODO Auto-generated catch block
 	}
 
 	public static boolean isFilePKZipCompatible(File file) {
@@ -390,17 +351,6 @@ public interface FCLoaderBasic {
 	// public Map<Module, ArrayList<String>> getAgents();
 
 	/**
-	 * Solo usas para Agentes. Usa en GameProvider
-	 * 
-	 * @param instrument
-	 * @return
-	 */
-	@Deprecated
-	public default Instrumentation setInstrumentation(Instrumentation instrument) {
-		return this.getGameProvider().setInstrumentation(instrument);
-	}
-
-	/**
 	 * This should be the instrumenations for HotSwapper from loading as an agent.
 	 * 
 	 * @return
@@ -451,7 +401,10 @@ public interface FCLoaderBasic {
 	}
 
 	public default void PremainAgents() {
-		for (Module agent : this.getRunModules()) {
+		// Premain/early-listener metadata belongs to a loaded module, not only to a
+		// runnable mod. Classpath/library modules may legitimately provide startup
+		// hooks too.
+		for (Module agent : this.getModules()) {
 			this.runAgentPremain(agent);
 		}
 	}
@@ -473,7 +426,9 @@ public interface FCLoaderBasic {
 			early_listeners.addAll(Arrays.asList(early_listener_class.split(",")));
 		}
 
-		final ClassLoader oldClassLoader = JBMUtilsAccessors.setContextClassLoader(agent.getClassLoader());
+		final Thread thread = Thread.currentThread();
+		final ClassLoader oldClassLoader = thread.getContextClassLoader();
+		thread.setContextClassLoader(agent.getClassLoader());
 		try {
 
 			for (String agent_clazz : preagent) {
@@ -528,7 +483,7 @@ public interface FCLoaderBasic {
 				e.printStackTrace();
 			}
 		} finally {
-			JBMUtilsAccessors.setContextClassLoader(oldClassLoader);
+			thread.setContextClassLoader(oldClassLoader);
 		}
 
 	}
@@ -618,40 +573,11 @@ public interface FCLoaderBasic {
 
 	public EventViewer getEventViewer();
 
-	public default List<DependencySpec> getCombinedDepSpecs(Module mod) {
-		List<DependencySpec> output = new ArrayList<DependencySpec>();
-		for (DependencySpec dep_spec : mod.getDependencies()) {
-			output.add(dep_spec);
-		}
-
-		for (Module module : this.getModules()) {
-			DependencySpec spec = new ModuleDependencySpecBuilder()
-					// .setModuleLoader(agentModule.getModuleLoader())
-					.setName(module.getName()).build();
-			if (!output.contains(spec)) {
-				output.add(spec);
-			}
-
-		}
-
-		return output;
-	}
-
-	public default void combineModuleDepSpecs() {
-		for (Module mod : this.getModules()) {
-			JBMUtilsAccessors.setModuleDependencies(mod, this.getCombinedDepSpecs(mod));
-		}
-	}
-
 	public boolean getModsLoaded();
 
 	public default ExecutionSide getExecutionSide() {
 		return this.getGameProvider().getExecutionSide();
 	}
 
-	@SuppressWarnings({ "removal", "deprecation" })
-	public default AccessControlContext getContext() {
-		return AccessController.getContext();
-	}
 
 }

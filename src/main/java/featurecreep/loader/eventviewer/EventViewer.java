@@ -95,23 +95,6 @@ public class EventViewer {
 		return listener;
 	}
 
-	// TODO add NonNull annotations on reflectionlistenertypes
-	@SuppressWarnings({ "rawtypes", "unchecked" })
-	@Deprecated
-	public EventListener<?> registerListener(String event_name, String method_name, Object instance,
-			Class<?>... param_classes) {
-		return this
-				.registerListener(new ReflectionEventListener(this, event_name, method_name, instance, param_classes));
-	}
-
-	@SuppressWarnings({ "rawtypes", "unchecked" })
-	@Deprecated
-	public EventListener<?> registerStaticReflectionListener(String event_name, String method_name, Class<?> instance,
-			Class<?>... param_classes) {
-		return this
-				.registerListener(new ReflectionEventListener(this, event_name, method_name, instance, param_classes));
-	}
-
 	@SuppressWarnings({ "rawtypes", "unchecked" })
 	public EventListener<?> registerVarArgsListener(String event_name, VarargsFunction<?> function) {
 		return this.registerListener(new VarArgsEventListener(this, event_name, function));

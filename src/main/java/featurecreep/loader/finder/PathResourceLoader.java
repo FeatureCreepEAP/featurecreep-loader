@@ -20,8 +20,6 @@ package featurecreep.loader.finder;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.lang.reflect.Field;
-import java.lang.reflect.UndeclaredThrowableException;
 import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URL;
@@ -30,12 +28,8 @@ import java.nio.file.FileVisitOption;
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
-import java.security.AccessControlContext;
-import java.security.AccessController;
 import java.security.CodeSigner;
 import java.security.CodeSource;
-import java.security.PrivilegedActionException;
-import java.security.PrivilegedExceptionAction;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
@@ -60,46 +54,34 @@ public class PathResourceLoader extends AbstractResourceLoader implements Iterab
 
 	public final String rootName;
 	public final Path root;
-	public final AccessControlContext context;
-
 	public final Manifest manifest;
 	public final CodeSource codeSource;
 
-	public PathResourceLoader(final String rootName, final Path root, final AccessControlContext context) {
+	public PathResourceLoader(final String rootName, final Path root) {
 		if (rootName == null) {
 			throw new IllegalArgumentException("rootName is null");
 		}
 		if (root == null) {
 			throw new IllegalArgumentException("root is null");
 		}
-		if (context == null) {
-			throw new IllegalArgumentException("context is null");
-		}
 		this.rootName = rootName;
 		this.root = root;
-		this.context = context;
 		final Path manifestFile = root.resolve("META-INF").resolve("MANIFEST.MF");
 		manifest = readManifestFile(manifestFile);
 
 		try {
-			codeSource = doPrivilegedIfNeeded(context, MalformedURLException.class,
-					() -> new CodeSource(root.toUri().toURL(), (CodeSigner[]) null));
+			codeSource = new CodeSource(root.toUri().toURL(), (CodeSigner[]) null);
 		} catch (MalformedURLException e) {
 			throw new IllegalArgumentException("Invalid root file specified", e);
 		}
 	}
 
 	private Manifest readManifestFile(final Path manifestFile) {
-		try {
-			return doPrivilegedIfNeeded(context, IOException.class, () -> {
-				if (Files.isDirectory(manifestFile)) {
-					return null;
-				}
-
-				try (InputStream is = Files.newInputStream(manifestFile)) {
-					return new Manifest(is);
-				}
-			});
+		if (!Files.isRegularFile(manifestFile)) {
+			return null;
+		}
+		try (InputStream is = Files.newInputStream(manifestFile)) {
+			return new Manifest(is);
 		} catch (IOException e) {
 			return null;
 		}
@@ -110,35 +92,14 @@ public class PathResourceLoader extends AbstractResourceLoader implements Iterab
 		return rootName;
 	}
 
-	public static String[] getNativeSearchPaths() {
-		try {
-			Class<?> clazz = Class.forName("org.jboss.modules.NativeLibraryResourceLoader.Identification");
-			Field var = clazz.getDeclaredField("NATIVE_SEARCH_PATHS");
-			return (String[]) var.get(null);
-		} catch (ClassNotFoundException | IllegalArgumentException | IllegalAccessException | NoSuchFieldException
-				| SecurityException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
-
-		return new String[] {};
-	}
 
 	@Override
 	public String getLibrary(String name) {
 		if (root.getFileSystem() == FileSystems.getDefault()) {
-			final String mappedName = System.mapLibraryName(name);
-			for (String path : getNativeSearchPaths()) {
-				Path testFile;
-				try {
-					testFile = root.resolve(path).resolve(mappedName);
-				} catch (InvalidPathException ignored) {
-					return null;
-				}
-				if (Files.exists(testFile)) {
-					return testFile.toAbsolutePath().toString();
-				}
-			}
+			// Delegate native-library platform detection to JBoss Modules through its
+			// public API. This preserves JBoss's OS-version/CPU fallback paths without
+			// reflecting into its package-private Identification class.
+			return new NativeLibraryResourceLoader(root.toFile()).getLibrary(name);
 		}
 		return null;
 	}
@@ -152,20 +113,18 @@ public class PathResourceLoader extends AbstractResourceLoader implements Iterab
 			return null;
 		}
 
-		return doPrivilegedIfNeeded(context, IOException.class, () -> {
-			if (!Files.exists(file)) {
-				return null;
-			}
-			final ClassSpec spec = new ClassSpec();
-			spec.setCodeSource(codeSource);
-			spec.setBytes(Files.readAllBytes(file));
-			return spec;
-		});
+		if (!Files.isRegularFile(file)) {
+			return null;
+		}
+		final ClassSpec spec = new ClassSpec();
+		spec.setCodeSource(codeSource);
+		spec.setBytes(Files.readAllBytes(file));
+		return spec;
 	}
 
 	@Override
 	public PackageSpec getPackageSpec(final String name) throws IOException {
-		URL rootUrl = doPrivilegedIfNeeded(context, IOException.class, () -> root.toUri().toURL());
+		URL rootUrl = root.toUri().toURL();
 		return getPackageSpec(name, manifest, rootUrl);
 	}
 
@@ -179,11 +138,11 @@ public class PathResourceLoader extends AbstractResourceLoader implements Iterab
 			return null;
 		}
 
-		if (!doPrivilegedIfNeeded(context, () -> Files.exists(file))) {
+		if (!Files.exists(file)) {
 			return null;
 		}
 
-		return new PathResource(file, cleanName, context);
+		return new PathResource(file, cleanName);
 	}
 
 	@Override
@@ -198,7 +157,7 @@ public class PathResourceLoader extends AbstractResourceLoader implements Iterab
 			return Files.walk(path, recursive ? Integer.MAX_VALUE : 1, FileVisitOption.FOLLOW_LINKS)
 					.filter(it -> !Files.isDirectory(it))
 					.<Resource>map(resourcePath -> new PathResource(resourcePath,
-							PathUtils.toGenericSeparators(root.relativize(resourcePath).toString()), context))
+							PathUtils.toGenericSeparators(root.relativize(resourcePath).toString())))
 					.iterator();
 		} catch (IOException e) {
 			return Collections.emptyIterator();
@@ -207,19 +166,12 @@ public class PathResourceLoader extends AbstractResourceLoader implements Iterab
 
 	@Override
 	public Collection<String> getPaths() {
-		try {
-			return doPrivilegedIfNeeded(context, IOException.class,
-					() -> Files.walk(root, FileVisitOption.FOLLOW_LINKS).filter(Files::isDirectory).map(dir -> {
-						final String result = root.relativize(dir).toString();
-						final String canonical = PathUtils.toGenericSeparators(result);
-
-						// JBoss modules expect folders not to end with a slash, so we have to strip it.
-						if (canonical.endsWith("/")) {
-							return canonical.substring(0, canonical.length() - 1);
-						} else {
-							return canonical;
-						}
-					}).collect(Collectors.toList()));
+		try (java.util.stream.Stream<Path> paths = Files.walk(root, FileVisitOption.FOLLOW_LINKS)) {
+			return paths.filter(Files::isDirectory).map(dir -> {
+				final String result = root.relativize(dir).toString();
+				final String canonical = PathUtils.toGenericSeparators(result);
+				return canonical.endsWith("/") ? canonical.substring(0, canonical.length() - 1) : canonical;
+			}).collect(Collectors.toList());
 		} catch (IOException e) {
 			return Collections.emptyList();
 		}
@@ -227,70 +179,12 @@ public class PathResourceLoader extends AbstractResourceLoader implements Iterab
 
 	@Override
 	public URI getLocation() {
-		return doPrivilegedIfNeeded(context, root::toUri);
+		return root.toUri();
 	}
 
 	public ResourceLoader createSubloader(final String relativePath, final String rootName) {
 		return new PathResourceLoader(rootName,
-				root.resolve(PathUtils.relativize(PathUtils.canonicalize(relativePath))), context);
+				root.resolve(PathUtils.relativize(PathUtils.canonicalize(relativePath))));
 	}
 
-	public static <T, E extends Throwable> T doPrivilegedIfNeeded(AccessControlContext context, Class<E> exceptionType,
-			PrivilegedExceptionAction<T> action) throws E {
-		SecurityManager sm = System.getSecurityManager();
-
-		if (sm == null) {
-			try {
-				return action.run();
-			} catch (RuntimeException re) {
-				throw re;
-			} catch (Exception e) {
-				if (exceptionType.isInstance(e)) {
-					throw exceptionType.cast(e);
-				}
-				throw new UndeclaredThrowableException(e);
-			}
-		} else {
-			try {
-				return AccessController.doPrivileged(action, context);
-			} catch (PrivilegedActionException e) {
-				try {
-					throw e.getException();
-				} catch (RuntimeException re) {
-					throw re;
-				} catch (Exception e1) {
-					if (exceptionType.isInstance(e1)) {
-						throw exceptionType.cast(e1);
-					}
-					throw new UndeclaredThrowableException(e1);
-				}
-			}
-		}
-	}
-
-	public static <T> T doPrivilegedIfNeeded(AccessControlContext context, PrivilegedExceptionAction<T> action) {
-		SecurityManager sm = System.getSecurityManager();
-
-		if (sm == null) {
-			try {
-				return action.run();
-			} catch (RuntimeException re) {
-				throw re;
-			} catch (Exception e) {
-				throw new UndeclaredThrowableException(e);
-			}
-		} else {
-			try {
-				return AccessController.doPrivileged(action, context);
-			} catch (PrivilegedActionException e) {
-				try {
-					throw e.getException();
-				} catch (RuntimeException re) {
-					throw re;
-				} catch (Exception e1) {
-					throw new UndeclaredThrowableException(e1);
-				}
-			}
-		}
-	}
 }

@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<module xmlns="urn:jboss:module:1.9" name="example.coolmod" version="1.0.0">
+    <main-class name="example.coolmod.Main"/>
+
+    <properties>
+        <property name="FeatureCreep-Mod-Id" value="example.coolmod"/>
+        <property name="FeatureCreep-Name" value="Cool Mod"/>
+        <property name="FeatureCreep-Visibility" value="public"/>
+        <property name="FeatureCreep-Auto-Dependencies" value="true"/>
+        <property name="FeatureCreep-Host-Fallback" value="true"/>
+        <property name="FeatureCreep-Side" value="both"/>
+        <property name="FeatureCreep-Runnable" value="true"/>
+
+        <!-- Nested JARs belong only to this mod unless changed to public. -->
+        <property name="FeatureCreep-Nested-Jars" value="private"/>
+        <property name="FeatureCreep-Nested-Jar-Paths"
+                  value="META-INF/jars/private-library.jar"/>
+
+        <!-- Multiple Sponge Mixin configs may be comma/semicolon/space separated. -->
+        <property name="MixinConfigs"
+                  value="coolmod.mixins.json,coolmod.client.mixins.json"/>
+
+        <!-- Optional transformers / Java-agent integration. -->
+        <property name="FeatureCreep-Transformer-Classes"
+                  value="example.coolmod.GameTransformer"/>
+        <property name="FeatureCreep-Transformer-Scope" value="all"/>
+        <property name="Premain-Class" value="example.coolmod.Agent"/>
+        <property name="Can-Retransform-Classes" value="true"/>
+    </properties>
+
+    <dependencies>
+        <module name="some.shared.api" optional="true" services="import"/>
+    </dependencies>
+</module>
