@@ -3,6 +3,9 @@ package featurecreep.loader.finder;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.MalformedURLException;
+import java.net.URISyntaxException;
+import java.net.URL;
 import java.util.Enumeration;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -52,35 +55,79 @@ public class FCFileSystemClassPathFinder extends FileSystemClassPathModuleFinder
     public static final PathFilter NO_MODULES_DIR;
 
     private static final Map<String, Set<String>> APP_PATH_PACKAGES = new ConcurrentHashMap<String, Set<String>>();
+    private static volatile ClassLoader appClassLoader = ClassLoader.getSystemClassLoader();
     private static volatile FCLoaderBasic appPathLoader;
 
     /**
-     * Declares a module jar as already defined on the application class path. Its
-     * classes are then resolved from the application loader rather than from a
-     * second module-owned copy, so static state is shared between both sides.
+     * Declares a module jar that the bootstrap has appended to the application class path.
      */
     public static void registerAppClassPathJar(File jar) throws IOException {
+        APP_PATH_PACKAGES.put(jar.getCanonicalPath(), scanAppClassPath(jar, true));
+    }
+
+    /**
+     * Returns the packages to delegate to the application loader, or null when the
+     * jar is module-owned. A jar that was never registered still counts as
+     * application-path when the application loader serves one of its classes, so a
+     * class is never defined both on the application path and inside a module.
+     */
+    private static Set<String> appPathPackages(File source) throws IOException {
+        if (source == null || !source.isFile()) return null;
+        String key = source.getCanonicalPath();
+        Set<String> packages = APP_PATH_PACKAGES.get(key);
+        if (packages == null) {
+            packages = scanAppClassPath(source, false);
+            if (packages == null) return null;
+            APP_PATH_PACKAGES.put(key, packages);
+        }
+        return packages;
+    }
+
+    private static Set<String> scanAppClassPath(File jar, boolean registered) throws IOException {
+        String jarPath = jar.getCanonicalPath();
         Set<String> packages = new LinkedHashSet<String>();
+        boolean served = false;
         try (JarFile jarFile = new JarFile(jar)) {
             Enumeration<JarEntry> entries = jarFile.entries();
             while (entries.hasMoreElements()) {
                 String name = entries.nextElement().getName();
+                if (!name.endsWith(".class") || name.startsWith("META-INF/")) continue;
                 int slash = name.lastIndexOf('/');
-                if (name.endsWith(".class") && slash > 0) {
-                    packages.add(name.substring(0, slash));
+                packages.add(slash < 0 ? "" : name.substring(0, slash));
+                File origin = originOnAppClassPath(name);
+                if (origin == null) continue;
+                if (jarPath.equals(origin.getCanonicalPath())) {
+                    served = true;
+                } else {
+                    System.err.println("FeatureCreep: " + name + " from " + jar.getName()
+                            + " is shadowed on the application class path by " + origin);
                 }
             }
         }
-        APP_PATH_PACKAGES.put(jar.getCanonicalPath(), packages);
+        return registered || served ? packages : null;
     }
 
-    private static Set<String> appPathPackages(File source) {
-        if (source == null || APP_PATH_PACKAGES.isEmpty()) return null;
+    private static File originOnAppClassPath(String classResource) {
+        URL url = appClassLoader.getResource(classResource);
+        if (url == null || !"jar".equals(url.getProtocol())) return null;
+        String spec = url.getPath();
+        int separator = spec.indexOf("!/");
+        if (separator < 0) return null;
         try {
-            return APP_PATH_PACKAGES.get(source.getCanonicalPath());
-        } catch (IOException e) {
+            return new File(new URL(spec.substring(0, separator)).toURI());
+        } catch (MalformedURLException | URISyntaxException | IllegalArgumentException e) {
             return null;
         }
+    }
+
+    static void useAppClassLoaderForTests(ClassLoader loader) {
+        appClassLoader = loader;
+    }
+
+    static void resetAppClassPathForTests() {
+        appClassLoader = ClassLoader.getSystemClassLoader();
+        appPathLoader = null;
+        APP_PATH_PACKAGES.clear();
     }
 
     static {
@@ -140,11 +187,9 @@ public class FCFileSystemClassPathFinder extends FileSystemClassPathModuleFinder
             setVersion(builder, descriptor);
             Set<String> appPathPackages = appPathPackages(entry.getSourceFile());
             if (appPathPackages != null) {
-                builder.addDependency(DependencySpec.createClassLoaderDependencySpec(
-                        ClassLoader.getSystemClassLoader(), appPathPackages));
-                // Classes stay on the app loader; resources such as META-INF/services and icons still resolve here.
-                builder.addResourceRoot(ResourceLoaderSpec.createResourceLoaderSpec(resourceLoader,
-                        path -> !path.endsWith(".class")));
+                builder.addDependency(DependencySpec.createClassLoaderDependencySpec(appClassLoader, appPathPackages));
+                builder.addResourceRoot(ResourceLoaderSpec.createResourceLoaderSpec(
+                        new AppPathResourceLoader(resourceLoader), PathFilters.acceptAll()));
             } else {
                 addSelfContent(builder, resourceLoader, descriptor);
                 addExtraResourceRoots(builder, resourceLoader, descriptor);
@@ -446,7 +491,7 @@ public class FCFileSystemClassPathFinder extends FileSystemClassPathModuleFinder
      * {@link #registerAppClassPathJar(File)}, or null if the class is not one of those.
      */
     public static FCLoaderBasic appClassPathLoader(Class<?> clazz) {
-        if (appPathLoader == null || clazz.getClassLoader() != ClassLoader.getSystemClassLoader()) return null;
+        if (appPathLoader == null || clazz.getClassLoader() != appClassLoader) return null;
         String pkg = clazz.getPackageName().replace('.', '/');
         for (Set<String> packages : APP_PATH_PACKAGES.values()) {
             if (packages.contains(pkg)) return appPathLoader;

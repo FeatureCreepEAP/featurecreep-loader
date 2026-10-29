@@ -37,6 +37,7 @@ public class FCConfigRegistry implements FCConfigApi {
     private final Map<String, FCConfigEntry> entries = new LinkedHashMap<String, FCConfigEntry>();
     private final Map<String, FCConfigValues> values = new HashMap<String, FCConfigValues>();
     private final Set<String> scannedModules = new HashSet<String>();
+    private final Set<String> providerClassNames = new HashSet<String>();
 
     public FCConfigRegistry() {
         this(configDirectory());
@@ -156,6 +157,9 @@ public class FCConfigRegistry implements FCConfigApi {
             Iterator<FCConfigProvider> providers = module.loadService(FCConfigProvider.class).iterator();
             while (providers.hasNext()) {
                 FCConfigProvider provider = providers.next();
+                if (!providerClassNames.add(provider.getClass().getName())) {
+                    continue;
+                }
                 if (registerProvider(provider)) {
                     registered++;
                 }

@@ -239,6 +239,9 @@ public final class FCModuleDescriptor {
             if (mainClass != null && !mainClass.isEmpty()) {
                 properties.put(FCModuleProperties.MAIN_CLASS, mainClass);
             }
+            if ((version == null || version.isEmpty()) && properties.containsKey(FCModuleProperties.MODULE_VERSION)) {
+                version = properties.get(FCModuleProperties.MODULE_VERSION);
+            }
             if (version != null && !version.isEmpty()) {
                 properties.put(FCModuleProperties.MODULE_VERSION, version);
             }
