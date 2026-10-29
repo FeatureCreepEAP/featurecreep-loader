@@ -29,7 +29,6 @@ import java.util.jar.JarFile;
 import java.util.zip.ZipInputStream;
 
 import org.jboss.modules.ClassTransformer;
-import org.jboss.modules.JLIClassTransformer;
 import org.jboss.modules.LocalModuleLoader;
 import org.jboss.modules.Module;
 import org.jboss.modules.ModuleFinder;
@@ -38,12 +37,15 @@ import org.jboss.modules.ModuleSpec;
 import org.jboss.modules.PreMain;
 import org.jboss.modules.Resource;
 
+import featurecreep.loader.config.FCConfigApi;
 import featurecreep.loader.eventviewer.EventViewer;
 import featurecreep.loader.filesystem.PhilKatzZip;
 import featurecreep.loader.finder.FCFileSystemClassPathFinder;
 import featurecreep.loader.finder.FileSystemResourceLoader;
 import featurecreep.loader.finder.ModuleLoadingMap;
 import featurecreep.loader.finder.ModuleLoadingMap.ModuleLoadingMapEntry;
+import featurecreep.loader.query.ModQuery;
+import featurecreep.loader.share.ObjectShare;
 import featurecreep.loader.utils.ArrayCombiner;
 
 public interface FCLoaderBasic {
@@ -82,7 +84,7 @@ public interface FCLoaderBasic {
 
 	public FileTypes filetypes = new FileTypes();// Is ok to be static and final
 
-	public ArrayList<String> known_nils();
+	public Set<String> known_nils();
 
 	default Path[] getCombindedModulePKZipLocations() {
 		ArrayCombiner<Path> combiner = new ArrayCombiner<Path>();
@@ -192,7 +194,7 @@ public interface FCLoaderBasic {
 //
 //	}
 
-	public ArrayList<ClassTransformer> getTransformers();
+	public List<ClassTransformer> getTransformers();
 
 	public default ArrayList<File> getRunOnlyFiles() {
 		ArrayList<File> fils = new ArrayList<File>();
@@ -369,7 +371,7 @@ public interface FCLoaderBasic {
 	public Instrumentation getInstrumentation();
 
 	public static ClassTransformer fromClassFileTransformer(ClassFileTransformer transformer) {
-		return new JLIClassTransformer(transformer);
+		return new RemovableClassFileTransformer(transformer);
 	}
 
 	public static ClassFileTransformer fromClassTransformer(ClassTransformer transformer) {
@@ -379,11 +381,14 @@ public interface FCLoaderBasic {
 
 				ByteBuffer buff = transformer.transform(loader, className, protectionDomain,
 						ByteBuffer.wrap(classfileBuffer));
-				if (buff != null) {
-					return buff.array();
+				if (buff == null || (buff.hasArray() && buff.array() == classfileBuffer && buff.arrayOffset() == 0
+						&& buff.position() == 0 && buff.limit() == classfileBuffer.length)) {
+					return classfileBuffer;
 				}
-
-				return classfileBuffer;
+				ByteBuffer readable = buff.duplicate();
+				byte[] out = new byte[readable.remaining()];
+				readable.get(out);
+				return out;
 			}
 
 		}
@@ -397,7 +402,7 @@ public interface FCLoaderBasic {
 	}
 
 	public default void addTransformer(ClassFileTransformer transformer) {
-		this.getTransformers().add(new JLIClassTransformer(transformer));
+		this.getTransformers().add(new RemovableClassFileTransformer(transformer));
 	}
 
 	public default void PremainAgents() {
@@ -432,53 +437,42 @@ public interface FCLoaderBasic {
 		try {
 
 			for (String agent_clazz : preagent) {
-
-				final Class<?> mainClass = Class.forName(agent_clazz, false, agent.getClassLoader());
-
-				Class.forName(agent_clazz, true, agent.getClassLoader());
-
-				final MethodHandles.Lookup lookup = MethodHandles.lookup();
-				final MethodHandle methodHandle;
-				// final MethodHandle methodHandleEventVwr;
-				// final MethodHandle methodHandleMain;
-
 				try {
-					methodHandle = lookup.findStatic(mainClass, "premain", PREMAIN_METHOD_TYPE());
+					final Class<?> mainClass = Class.forName(agent_clazz, false, agent.getClassLoader());
+					Class.forName(agent_clazz, true, agent.getClassLoader());
+					final MethodHandles.Lookup lookup = MethodHandles.lookup();
+					final MethodHandle methodHandle = lookup.findStatic(mainClass, "premain", PREMAIN_METHOD_TYPE());
 					methodHandle.invokeExact(new String(""), this.getInstrumentation());
-				} catch (Exception e) {
-					// TODO Auto-generated catch block
-					e.printStackTrace();
+				} catch (Throwable e) {
+					reportStartupFailure(agent_clazz, e);
 				}
-
 			}
 
 			ServiceLoader<PreMain> premains = agent.loadService(PreMain.class);
 			for (PreMain premain : premains) {
-				premain.run(new ArrayList<String>());// No Args ATM
+				try {
+					premain.run(new ArrayList<String>());// No Args ATM
+				} catch (Throwable e) {
+					reportStartupFailure(premain.getClass().getName(), e);
+				}
 			}
 
 			for (String agent_clazz : early_listeners) {
-
-				final Class<?> mainClass = Class.forName(agent_clazz, false, agent.getClassLoader());
-
-				Class.forName(agent_clazz, true, agent.getClassLoader());
-
-				final MethodHandles.Lookup lookup = MethodHandles.lookup();
-				final MethodHandle methodHandleEventVwr;
-
 				try {
-					methodHandleEventVwr = lookup.findStatic(mainClass, "registerEarlyEventListeners",
-							PREMAIN_EVENTVWR_METHOD_TYPE());
+					final Class<?> mainClass = Class.forName(agent_clazz, false, agent.getClassLoader());
+					Class.forName(agent_clazz, true, agent.getClassLoader());
+					final MethodHandles.Lookup lookup = MethodHandles.lookup();
+					final MethodHandle methodHandleEventVwr = lookup.findStatic(mainClass,
+							"registerEarlyEventListeners", PREMAIN_EVENTVWR_METHOD_TYPE());
 					methodHandleEventVwr.invokeExact(this.getEventViewer());
-				} catch (Exception e) {
-					// TODO Auto-generated catch block
-					// e.printStackTrace();
+				} catch (NoSuchMethodException e) {
+					// registerEarlyEventListeners is optional
+				} catch (Throwable e) {
+					reportStartupFailure(agent_clazz, e);
 				}
-
 			}
 
 		} catch (Throwable e) {
-			// TODO Auto-generated catch block
 			if (this.getDebugMode()) {
 				e.printStackTrace();
 			}
@@ -486,6 +480,16 @@ public interface FCLoaderBasic {
 			thread.setContextClassLoader(oldClassLoader);
 		}
 
+	}
+
+	private void reportStartupFailure(String source, Throwable e) {
+		if (e instanceof VirtualMachineError vme) {
+			throw vme;
+		}
+		System.err.println("FeatureCreep: startup hook failed for " + source + ": " + e);
+		if (this.getDebugMode()) {
+			e.printStackTrace();
+		}
 	}
 
 	// Need to account for main and premain differences, i originally thought they
@@ -579,5 +583,47 @@ public interface FCLoaderBasic {
 		return this.getGameProvider().getExecutionSide();
 	}
 
+	/**
+	 * Game identifier reported by the provider, or {@code null} when unknown.
+	 */
+	public default String getGameId() {
+		GameProvider provider = this.getGameProvider();
+		return provider == null ? null : provider.getGameId();
+	}
+
+	/**
+	 * Game version reported by the provider, or {@code null} when unknown.
+	 */
+	public default String getGameVersion() {
+		GameProvider provider = this.getGameProvider();
+		return provider == null ? null : provider.getGameVersion();
+	}
+
+	/**
+	 * FeatureCreep loader version reported by the provider, or {@code null} when unknown.
+	 */
+	public default String getLoaderVersion() {
+		GameProvider provider = this.getGameProvider();
+		return provider == null ? null : provider.getLoaderVersion();
+	}
+
+	/**
+	 * Configuration registry for FeatureCreep modules. Never returns {@code null};
+	 * a provider without a registry yields a no-op API.
+	 */
+	public default FCConfigApi getConfigApi() {
+		GameProvider provider = this.getGameProvider();
+		FCConfigApi api = provider == null ? null : provider.getConfigApi();
+		return api == null ? FCConfigApi.none() : api;
+	}
+
+	public default ModQuery getModQuery() {
+		return new ModQuery(this);
+	}
+
+	/**
+	 * Shared key/value store between mods. One instance per loader.
+	 */
+	public ObjectShare getObjectShare();
 
 }

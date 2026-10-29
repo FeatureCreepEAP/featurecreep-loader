@@ -2,17 +2,25 @@ package featurecreep.loader;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.Reader;
 import java.lang.instrument.Instrumentation;
 import java.lang.instrument.ClassFileTransformer;
 import java.lang.reflect.InvocationTargetException;
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.ServiceConfigurationError;
+import java.util.ServiceLoader;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.jar.JarFile;
 
 import org.jboss.modules.ClassTransformer;
@@ -25,13 +33,26 @@ import org.jboss.modules.ModuleSpec;
 import org.jboss.modules.Resource;
 import org.jboss.modules.ResourceLoader;
 
+import featurecreep.loader.entrypoint.Entrypoint;
+import featurecreep.loader.entrypoint.EntrypointPhase;
+import featurecreep.loader.entrypoint.JavaLanguageAdapter;
+import featurecreep.loader.entrypoint.LanguageAdapter;
 import featurecreep.loader.eventviewer.EventViewer;
+import featurecreep.loader.environment.EnvironmentStripper;
+import featurecreep.loader.eventviewer.listeners.IncompatibleEventListenerMethodReference;
 import featurecreep.loader.filesystem.PhilKatzZip;
 import featurecreep.loader.finder.FileSystemResourceLoader;
 import featurecreep.loader.finder.ModuleLoadingMap;
 import featurecreep.loader.finder.ModuleLoadingMap.ModuleLoadingMapEntry;
 import featurecreep.loader.finder.NeedsFCLoaderBasic;
 import featurecreep.loader.finder.PathResourceLoader;
+import featurecreep.loader.graph.ModuleGraph;
+import featurecreep.loader.mapping.MappingExParser;
+import featurecreep.loader.mapping.MappingExRecord;
+import featurecreep.loader.mapping.MappingExTransformer;
+import featurecreep.loader.mapping.MappingRules;
+import featurecreep.loader.mixin.MixinSupport;
+import featurecreep.loader.share.ObjectShare;
 
 /**
  * FeatureCreep's JBoss Modules loader.
@@ -43,7 +64,7 @@ import featurecreep.loader.finder.PathResourceLoader;
  */
 public final class FCLoaderBasicR9 extends ModuleLoader implements FCLoaderBasic {
 
-    public final ArrayList<ClassTransformer> transformers = new ArrayList<ClassTransformer>();
+    public final List<ClassTransformer> transformers = new CopyOnWriteArrayList<ClassTransformer>();
     public final ArrayList<Module> run_only_modules = new ArrayList<Module>();
     public final ArrayList<Module> modules = new ArrayList<Module>();
     public int threads;
@@ -51,13 +72,20 @@ public final class FCLoaderBasicR9 extends ModuleLoader implements FCLoaderBasic
     public final Instrumentation instrumentation;
     public ClassTransformer main_transformer;
     public final EventViewer eventvwr = new EventViewer();
-    public final ArrayList<String> known_nulls = new ArrayList<String>();
+    public final Set<String> known_nulls = ConcurrentHashMap.newKeySet();
     public boolean mods_loaded = false;
     public final ModuleLoadingMap module_loading_map = new ModuleLoadingMap();
     public final ModuleFinder[] finders;
     public GameProvider provider;
+    private final ObjectShare object_share = new ObjectShare();
 
     private boolean hotswapNeeded = false;
+
+    private static volatile FCLoaderBasicR9 active;
+
+    public static FCLoaderBasic active() {
+        return active;
+    }
 
     public FCLoaderBasicR9(GameProvider provider, int threads) {
         this(FCLoaderBasic.getFinders(provider), provider, threads);
@@ -76,6 +104,7 @@ public final class FCLoaderBasicR9 extends ModuleLoader implements FCLoaderBasic
                 ((NeedsFCLoaderBasic) finder).setFCLoaderBasic(this);
             }
         }
+        active = this;
 
         if (!getDebugMode()) {
             System.out.println("Debug mode is off");
@@ -131,8 +160,74 @@ public final class FCLoaderBasicR9 extends ModuleLoader implements FCLoaderBasic
             }
         }
 
+        addTransformer(new EnvironmentStripper(getExecutionSide()));
+        addMappingExTransformer();
         loadDeclaredTransformers();
+        discoverConfigProviders();
+        registerModuleMixins();
         mods_loaded = true;
+    }
+
+    private void addMappingExTransformer() {
+        if (provider != null && !provider.canApplyAccessWidening()) {
+            if (getDebugMode()) {
+                System.out.println("FeatureCreep: MappingEx access widening is not applied on this host");
+            }
+            return;
+        }
+        List<MappingExRecord> records = new ArrayList<MappingExRecord>();
+        for (ModuleLoadingMapEntry entry : module_loading_map.snapshot()) {
+            FCModuleDescriptor descriptor = entry.getDescriptor();
+            ResourceLoader loader = entry.getLoader();
+            if (descriptor == null || loader == null) {
+                continue;
+            }
+            for (String path : FCModuleProperties.splitList(descriptor.getProperty(FCModuleProperties.MAPPINGEX_FILES))) {
+                Resource resource = loader.getResource(path);
+                if (resource == null) {
+                    System.err.println("FeatureCreep: MappingEx file " + path + " not found in " + entry.getName());
+                    continue;
+                }
+                try (Reader reader = new InputStreamReader(resource.openStream(), StandardCharsets.UTF_8)) {
+                    records.addAll(MappingExParser.parse(reader));
+                } catch (IOException e) {
+                    System.err.println("FeatureCreep: unable to read MappingEx file " + path + " from " + entry.getName() + ": " + e);
+                }
+            }
+        }
+        if (!records.isEmpty()) {
+            addTransformer(new MappingExTransformer(MappingRules.of(records)));
+        }
+    }
+
+    private void registerModuleMixins() {
+        MixinSupport support = provider == null ? MixinSupport.NONE : provider.getMixinSupport();
+        for (Module mod : new ArrayList<Module>(modules)) {
+            List<String> configs = FCModuleProperties.getMixinConfigs(mod);
+            if (!configs.isEmpty()) {
+                support.registerMixinConfigs(mod.getName(), configs, mod.getClassLoader());
+            }
+        }
+    }
+
+    /**
+     * Lets loaded modules contribute config entries through the
+     * {@code FCConfigProvider} service. A failing provider is isolated by the
+     * registry and never stops mod loading.
+     */
+    private void discoverConfigProviders() {
+        try {
+            int registered = getConfigApi().discoverProviders(new ArrayList<Module>(modules));
+            if (getDebugMode() && registered > 0) {
+                System.out.println("FeatureCreep registered " + registered + " config entr"
+                        + (registered == 1 ? "y" : "ies") + " from module services");
+            }
+        } catch (Throwable t) {
+            if (t instanceof VirtualMachineError) {
+                throw (VirtualMachineError) t;
+            }
+            System.err.println("FeatureCreep config provider discovery failed: " + t);
+        }
     }
 
     private void discoverFiles(Iterable<File> files, boolean defaultRunnable) {
@@ -237,6 +332,12 @@ public final class FCLoaderBasicR9 extends ModuleLoader implements FCLoaderBasic
             if (getDebugMode()) {
                 System.out.println("Skipping " + file + " because FeatureCreep-Side does not match " + getExecutionSide());
             }
+            closeQuietly(resourceLoader);
+            return null;
+        }
+        String compatibilityMismatch = FCModuleCompatibility.findMismatch(descriptor.getProperties(), provider);
+        if (compatibilityMismatch != null) {
+            System.err.println("FeatureCreep skipping " + file.getName() + ": " + compatibilityMismatch);
             closeQuietly(resourceLoader);
             return null;
         }
@@ -399,20 +500,159 @@ public final class FCLoaderBasicR9 extends ModuleLoader implements FCLoaderBasic
         return this;
     }
 
-    @Override
-    public void runMods() {
-        for (Module mod : new ArrayList<Module>(getRunModules())) {
-            String main = mod.getProperty(FCModuleProperties.MAIN_CLASS);
-            if (main != null && !main.isEmpty()) {
-                try {
-                    mod.run(new String[0]);
-                } catch (NoSuchMethodException | InvocationTargetException | ClassNotFoundException e) {
-                    e.printStackTrace();
+    private List<Module> orderedRunModules() {
+        ModuleGraph.Resolution resolution = resolveModuleGraph();
+        for (String warning : resolution.warnings()) {
+            System.err.println("FeatureCreep warning: " + warning);
+        }
+        List<Module> ordered = new ArrayList<Module>();
+        for (String name : resolution.loadOrder()) {
+            for (Module mod : run_only_modules) {
+                if (mod.getName().equals(name) && !ordered.contains(mod)) {
+                    ordered.add(mod);
+                    break;
                 }
-            } else if (getDebugMode()) {
-                System.out.println(mod.getName() + " has no main class; loaded as a library/module only");
             }
         }
+        for (Module mod : run_only_modules) {
+            String reason = resolution.unloadable().get(mod.getName());
+            if (reason != null) {
+                System.err.println("FeatureCreep will not run " + mod.getName() + ": " + reason);
+            } else if (!ordered.contains(mod)) {
+                ordered.add(mod);
+            }
+        }
+        return ordered;
+    }
+
+    private ModuleGraph.Resolution resolveModuleGraph() {
+        ModuleGraph graph = new ModuleGraph();
+        List<ModuleLoadingMapEntry> described = new ArrayList<ModuleLoadingMapEntry>();
+        for (ModuleLoadingMapEntry entry : module_loading_map.snapshot()) {
+            if (entry.getDescriptor() == null || known_nils().contains(entry.getName())) {
+                continue;
+            }
+            described.add(entry);
+            String version = entry.getDescriptor().getVersion();
+            try {
+                graph.addModule(entry.getName(), version);
+            } catch (IllegalArgumentException e) {
+                System.err.println("FeatureCreep ignores malformed version '" + version + "' of " + entry.getName()
+                        + ": " + e.getMessage());
+                graph.addModule(entry.getName(), null);
+            }
+        }
+        for (ModuleLoadingMapEntry entry : described) {
+            for (FCModuleDescriptor.Dependency dependency : entry.getDescriptor().getDependencies()) {
+                try {
+                    graph.addDependency(entry.getName(), dependency.getName(),
+                            ModuleGraph.Kind.valueOf(dependency.getKind().name()), dependency.getVersionRange());
+                } catch (IllegalArgumentException e) {
+                    System.err.println("FeatureCreep ignores dependency " + dependency.getName() + " of "
+                            + entry.getName() + ": " + e.getMessage());
+                }
+            }
+        }
+        return graph.resolve();
+    }
+
+    @Override
+    public void runMods() {
+        List<Module> runnable = orderedRunModules();
+        Map<String, LanguageAdapter> adapters = languageAdapters();
+        ExecutionSide side = getExecutionSide();
+        for (EntrypointPhase phase : EntrypointPhase.values()) {
+            fireEntrypointPhase(phase);
+            for (Module mod : runnable) {
+                for (Entrypoint entrypoint : entrypointsOf(mod)) {
+                    if (entrypoint.phase() == phase && entrypoint.runsOn(side)) {
+                        invokeEntrypoint(mod, entrypoint, adapters);
+                    }
+                }
+            }
+            if (phase == EntrypointPhase.READY) {
+                for (Module mod : runnable) {
+                    if (hotswapOptIn(mod) && mod.getProperty(FCModuleProperties.AGENT_CLASS) != null) {
+                        runAgent(mod);
+                    }
+                }
+            }
+        }
+    }
+
+    private List<Entrypoint> entrypointsOf(Module mod) {
+        ModuleLoadingMapEntry entry = module_loading_map.get(mod.getName());
+        if (entry != null && entry.getDescriptor() != null) {
+            return entry.getDescriptor().getEntrypoints();
+        }
+        String main = mod.getProperty(FCModuleProperties.MAIN_CLASS);
+        if (main == null || main.isEmpty()) {
+            return List.of();
+        }
+        return List.of(new Entrypoint(Entrypoint.MAIN, main, Entrypoint.JAVA_ADAPTER));
+    }
+
+    private void invokeEntrypoint(Module mod, Entrypoint entrypoint, Map<String, LanguageAdapter> adapters) {
+        Thread thread = Thread.currentThread();
+        ClassLoader previous = thread.getContextClassLoader();
+        thread.setContextClassLoader(mod.getClassLoader());
+        try {
+            boolean moduleMain = entrypoint.phase() == EntrypointPhase.MAIN
+                    && Entrypoint.JAVA_ADAPTER.equals(entrypoint.adapter())
+                    && entrypoint.className().equals(mod.getProperty(FCModuleProperties.MAIN_CLASS));
+            if (moduleMain) {
+                mod.run(new String[0]);
+                return;
+            }
+            LanguageAdapter adapter = adapters.get(entrypoint.adapter());
+            if (adapter == null) {
+                System.err.println("FeatureCreep no language adapter '" + entrypoint.adapter() + "' for "
+                        + entrypoint.className() + " in " + mod.getName());
+                return;
+            }
+            adapter.invoke(entrypoint, mod.getClassLoader(), new String[0]);
+        } catch (VirtualMachineError e) {
+            throw e;
+        } catch (Throwable t) {
+            System.err.println("FeatureCreep entrypoint " + entrypoint.type() + " " + entrypoint.className()
+                    + " from " + mod.getName() + " failed: " + t);
+            t.printStackTrace();
+        } finally {
+            thread.setContextClassLoader(previous);
+        }
+    }
+
+    private Map<String, LanguageAdapter> languageAdapters() {
+        Map<String, LanguageAdapter> adapters = new HashMap<String, LanguageAdapter>();
+        adapters.put(Entrypoint.JAVA_ADAPTER, new JavaLanguageAdapter());
+        addLanguageAdapters(adapters, ServiceLoader.load(LanguageAdapter.class, FCLoaderBasic.class.getClassLoader()));
+        for (Module mod : new ArrayList<Module>(modules)) {
+            addLanguageAdapters(adapters, mod.loadService(LanguageAdapter.class));
+        }
+        return adapters;
+    }
+
+    private static void addLanguageAdapters(Map<String, LanguageAdapter> adapters, Iterable<LanguageAdapter> found) {
+        try {
+            for (LanguageAdapter adapter : found) {
+                adapters.putIfAbsent(adapter.name(), adapter);
+            }
+        } catch (ServiceConfigurationError e) {
+            System.err.println("FeatureCreep could not load language adapter: " + e.getMessage());
+        }
+    }
+
+    private void fireEntrypointPhase(EntrypointPhase phase) {
+        try {
+            eventvwr.invokeEvent(phase.eventName());
+        } catch (IncompatibleEventListenerMethodReference e) {
+            System.err.println("FeatureCreep event " + phase.eventName() + " has an incompatible listener: " + e.getMessage());
+        }
+    }
+
+    private static boolean hotswapOptIn(Module mod) {
+        return Boolean.parseBoolean(mod.getProperty(FCModuleProperties.CAN_REDEFINE_CLASSES))
+                || Boolean.parseBoolean(mod.getProperty(FCModuleProperties.CAN_RETRANSFORM_CLASSES));
     }
 
     @Override
@@ -427,7 +667,7 @@ public final class FCLoaderBasicR9 extends ModuleLoader implements FCLoaderBasic
         }
     }
 
-    @Override public ArrayList<ClassTransformer> getTransformers() { return transformers; }
+    @Override public List<ClassTransformer> getTransformers() { return transformers; }
     @Override public ArrayList<Module> getRunModules() { return run_only_modules; }
 
     @Override
@@ -457,7 +697,8 @@ public final class FCLoaderBasicR9 extends ModuleLoader implements FCLoaderBasic
     @Override public Instrumentation getInstrumentationForAgent() { return instrumentation; }
     @Override public ClassTransformer getMainTransformer() { return main_transformer; }
     @Override public EventViewer getEventViewer() { return eventvwr; }
-    @Override public ArrayList<String> known_nils() { return known_nulls; }
+    @Override public ObjectShare getObjectShare() { return object_share; }
+    @Override public Set<String> known_nils() { return known_nulls; }
     @Override public boolean getModsLoaded() { return mods_loaded; }
     @Override public ExecutionSide getExecutionSide() { return provider.getExecutionSide(); }
     @Override public ClassTransformer setMainTransformer(ClassTransformer transformer) { main_transformer = transformer; return transformer; }

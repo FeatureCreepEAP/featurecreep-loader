@@ -42,7 +42,23 @@ public final class FCModuleProperties {
     /** Optional comma-separated extra nested JAR paths. */
     public static final String NESTED_JAR_PATHS = "FeatureCreep-Nested-Jar-Paths";
 
+    /**
+     * Game identifier the module targets, for example {@code minecraft}. Compared
+     * case-insensitively with {@code GameProvider#getGameId()} when both are known.
+     */
+    public static final String TARGET_GAME = "FeatureCreep-Target-Game";
+    /** Version range over {@code GameProvider#getGameVersion()}, for example {@code [1.20,1.21)}. */
+    public static final String TARGET_GAME_VERSION = "FeatureCreep-Target-Game-Version";
+    /** Compatibility alias used by target descriptors. */
+    public static final String TARGET_VERSION_RANGE = "FeatureCreep-Target-Version-Range";
+    /** Version range over the FeatureCreep loader version, for example {@code >=12}. */
+    public static final String LOADER_VERSION = "FeatureCreep-Loader-Version";
+    /** Compatibility alias used by target descriptors. */
+    public static final String LOADER_VERSION_RANGE = "FeatureCreep-Loader-Version-Range";
+
     public static final String MIXIN_CONFIGS = "MixinConfigs";
+
+    public static final String MAPPINGEX_FILES = "MappingEx-Files";
 
     /**
      * Marker written by FPMBuild SuperInjection. A JAR with this entry remains

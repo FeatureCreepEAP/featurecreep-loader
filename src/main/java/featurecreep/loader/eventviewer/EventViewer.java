@@ -4,6 +4,9 @@
 package featurecreep.loader.eventviewer;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -26,8 +29,8 @@ import featurecreep.loader.utils.VarargsFunction;
  */
 public class EventViewer {
 
-	public ArrayList<EventViewerEvent<?>> events = new ArrayList<EventViewerEvent<?>>();
-	public ArrayList<EventListener<?>> listeners = new ArrayList<EventListener<?>>();
+	private final CopyOnWriteArrayList<EventViewerEvent<?>> events = new CopyOnWriteArrayList<>();
+	private final CopyOnWriteArrayList<EventListener<?>> listeners = new CopyOnWriteArrayList<>();
 
 	@SuppressWarnings({ "unchecked", "rawtypes" })
 	public EventViewerEvent<?> addEvent(String event_name, Object... params) {
@@ -42,17 +45,38 @@ public class EventViewer {
 			ev = new BasicAwareEvent(this, event_name, params);
 		}
 
-		events.add(ev);
-		return ev;
+		return addEvent(ev);
 	}
 
 	public EventViewerEvent<?> addEvent(EventViewerEvent<?> ev) {
-		events.add(ev);
+		synchronized (events) {
+			events.add(ev);
+		}
 		return ev;
 	}
 
-	public ArrayList<EventViewerEvent<?>> getEvents() {
-		return events;
+	/**
+	 * Finds or creates an event by name, updates its payload, and invokes its listeners.
+	 * This convenience method keeps event producers independent from the concrete event
+	 * implementation used by the viewer.
+	 */
+	public Object[] invokeEvent(String event_name, Object... params)
+			throws IncompatibleEventListenerMethodReference {
+		EventViewerEvent<?> event;
+		synchronized (events) {
+			// Aware event implementations cache typed parameters, so replace the
+			// event rather than mutating only the generic payload array.
+			EventViewerEvent<?> existing = getEvent(event_name);
+			if (existing != null) {
+				events.remove(existing);
+			}
+			event = addEvent(event_name, params);
+		}
+		return invokeEvent(event);
+	}
+
+	public List<EventViewerEvent<?>> getEvents() {
+		return Collections.unmodifiableList(events);
 	}
 
 	public EventViewerEvent<?> getEvent(String event_name) {
@@ -65,8 +89,8 @@ public class EventViewer {
 		return null;
 	}
 
-	public ArrayList<EventListener<?>> getListeners() {
-		return listeners;
+	public List<EventListener<?>> getListeners() {
+		return Collections.unmodifiableList(listeners);
 	}
 
 	public ArrayList<EventListener<?>> getListener(String event_name) {

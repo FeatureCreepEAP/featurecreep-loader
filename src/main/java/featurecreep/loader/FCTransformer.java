@@ -19,7 +19,7 @@ public class FCTransformer implements ClassTransformer {
 		// TODO Auto-generated method stub
 		ByteBuffer buff = classBytes;
 		for (ClassTransformer transformer : this.loader.getTransformers()) {
-			ByteBuffer changes = transformer.transform(loader, className, protectionDomain, classBytes);
+			ByteBuffer changes = transformer.transform(loader, className, protectionDomain, buff);
 			if (changes != null) {
 				buff = changes;
 			}

@@ -11,6 +11,9 @@ import java.util.Set;
 
 import org.jboss.modules.ModuleFinder;
 
+import featurecreep.loader.config.FCConfigApi;
+import featurecreep.loader.mixin.MixinSupport;
+
 /**
  * Supplies game/application-specific information to FeatureCreep's JBoss
  * Modules loader.  The default methods keep older providers source compatible
@@ -106,6 +109,58 @@ public interface GameProvider {
      * allowed to see other normal top-level mods automatically.
      */
     default boolean exposeModsToEachOtherByDefault() {
+        return true;
+    }
+
+    /**
+     * Stable identifier of the game this provider runs, for example
+     * {@code minecraft}. Matched against {@code FeatureCreep-Target-Game} module
+     * metadata. {@code null} means unknown, which skips that check.
+     */
+    default String getGameId() {
+        return null;
+    }
+
+    /**
+     * Version of the running game, for example {@code 1.21.1}. Matched against
+     * {@code FeatureCreep-Target-Game-Version} module ranges. {@code null} means
+     * unknown; ranges are then not enforced.
+     */
+    default String getGameVersion() {
+        return null;
+    }
+
+    /**
+     * Version of the FeatureCreep loader itself. Matched against
+     * {@code FeatureCreep-Loader-Version} module ranges. Defaults to the version in the
+     * loader JAR's Maven metadata, or {@code null} when it is not recorded.
+     */
+    default String getLoaderVersion() {
+        return FCLoaderVersion.get();
+    }
+
+    /**
+     * Loader-neutral configuration registry. The default is the shared
+     * file-backed registry under {@code ./etc/}, or {@code featurecreep.config.dir}.
+     */
+    default FCConfigApi getConfigApi() {
+        return FCConfigApi.shared();
+    }
+
+    /**
+     * Applies mixin configs declared by modules. Only hosts that run Sponge Mixin
+     * override this; the loader itself never depends on mixins.
+     */
+    default MixinSupport getMixinSupport() {
+        return MixinSupport.NONE;
+    }
+
+    /**
+     * Whether MappingEx access widening may be applied to classes this host loads.
+     * Hosts whose class loading FeatureCreep cannot route through its transformers
+     * return false, and module MappingEx rules are then skipped.
+     */
+    default boolean canApplyAccessWidening() {
         return true;
     }
 }

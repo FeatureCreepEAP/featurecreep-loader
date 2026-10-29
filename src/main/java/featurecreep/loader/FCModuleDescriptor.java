@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.jar.Attributes;
 import java.util.jar.Manifest;
@@ -16,6 +17,7 @@ import javax.xml.parsers.ParserConfigurationException;
 
 import org.jboss.modules.Resource;
 import org.jboss.modules.ResourceLoader;
+import featurecreep.loader.entrypoint.Entrypoint;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
@@ -32,33 +34,78 @@ public final class FCModuleDescriptor {
 
     public static final String[] MODULE_XML_LOCATIONS = { "modules/module.xml", "module.xml" };
 
+    /**
+     * How a dependency affects loading. {@code breaks} is intentionally absent: a mod must not be able to crash another.
+     */
+    public enum DependencyKind {
+        REQUIRED, OPTIONAL, RECOMMENDS, SUGGESTS, CONFLICTS;
+
+        public static DependencyKind parse(String value) throws IOException {
+            return switch (value.trim().toLowerCase(Locale.ROOT)) {
+                case "required" -> REQUIRED;
+                case "optional" -> OPTIONAL;
+                case "recommends" -> RECOMMENDS;
+                case "suggests" -> SUGGESTS;
+                case "conflicts" -> CONFLICTS;
+                default -> throw new IOException("Unknown dependency kind '" + value + "'");
+            };
+        }
+    }
+
     public static final class Dependency {
         private final String name;
-        private final boolean optional;
+        private final DependencyKind kind;
         private final boolean export;
         private final boolean services;
+        private final String versionRange;
 
         Dependency(String name, boolean optional, boolean export, boolean services) {
+            this(name, optional, export, services, null);
+        }
+
+        Dependency(String name, boolean optional, boolean export, boolean services, String versionRange) {
+            this(name, optional ? DependencyKind.OPTIONAL : DependencyKind.REQUIRED, export, services, versionRange);
+        }
+
+        Dependency(String name, DependencyKind kind, boolean export, boolean services, String versionRange) {
             this.name = name;
-            this.optional = optional;
+            this.kind = kind;
             this.export = export;
             this.services = services;
+            this.versionRange = versionRange;
         }
 
         public String getName() { return name; }
-        public boolean isOptional() { return optional; }
+        public DependencyKind getKind() { return kind; }
+
+        /**
+         * True when loading does not require this dependency: optional, recommends, or suggests.
+         */
+        public boolean isOptional() {
+            return kind == DependencyKind.OPTIONAL || kind == DependencyKind.RECOMMENDS || kind == DependencyKind.SUGGESTS;
+        }
+
+        public boolean isConflict() { return kind == DependencyKind.CONFLICTS; }
         public boolean isExport() { return export; }
         public boolean isServices() { return services; }
+
+        /**
+         * Optional version range the dependency must satisfy, from the
+         * {@code version} or {@code version-range} attribute; {@code null} when omitted.
+         */
+        public String getVersionRange() { return versionRange; }
     }
 
     private String declaredName;
     private String mainClass;
+    private String manifestMainClass;
     private String version;
     private String xmlLocation;
     private final Map<String, String> properties = new LinkedHashMap<String, String>();
     private final List<Dependency> dependencies = new ArrayList<Dependency>();
     private final List<String> resourceRoots = new ArrayList<String>();
     private final Map<String, List<String>> providedServices = new LinkedHashMap<String, List<String>>();
+    private final List<Entrypoint> declaredEntrypoints = new ArrayList<Entrypoint>();
 
     public String getDeclaredName() { return declaredName; }
     public String getMainClass() { return mainClass; }
@@ -66,6 +113,22 @@ public final class FCModuleDescriptor {
     public String getXmlLocation() { return xmlLocation; }
     public Map<String, String> getProperties() { return Collections.unmodifiableMap(properties); }
     public List<Dependency> getDependencies() { return Collections.unmodifiableList(dependencies); }
+
+    /**
+     * Entrypoints in declaration order. {@code main-class} or the manifest Main-Class comes first as a {@code main} entrypoint.
+     */
+    public List<Entrypoint> getEntrypoints() {
+        List<Entrypoint> all = new ArrayList<Entrypoint>();
+        if (mainClass != null && !mainClass.isEmpty()) {
+            all.add(new Entrypoint(Entrypoint.MAIN, mainClass, Entrypoint.JAVA_ADAPTER));
+        }
+        for (Entrypoint entrypoint : declaredEntrypoints) {
+            if (!(Entrypoint.MAIN.equals(entrypoint.type()) && entrypoint.className().equals(mainClass))) {
+                all.add(entrypoint);
+            }
+        }
+        return Collections.unmodifiableList(all);
+    }
     public List<String> getResourceRoots() { return Collections.unmodifiableList(resourceRoots); }
     public Map<String, List<String>> getProvidedServices() { return Collections.unmodifiableMap(providedServices); }
 
@@ -91,7 +154,17 @@ public final class FCModuleDescriptor {
                 break;
             }
         }
+        if (!result.hasModuleXml()) {
+            result.useManifestMainClass();
+        }
         return result;
+    }
+
+    private void useManifestMainClass() {
+        mainClass = manifestMainClass;
+        if (mainClass != null && !mainClass.isEmpty()) {
+            properties.put(FCModuleProperties.MAIN_CLASS, mainClass);
+        }
     }
 
     private void importManifest(ResourceLoader loader) throws IOException {
@@ -105,11 +178,11 @@ public final class FCModuleDescriptor {
         }
         Attributes attrs = manifest.getMainAttributes();
         for (Map.Entry<Object, Object> entry : attrs.entrySet()) {
-            if (entry.getKey() != null && entry.getValue() != null) {
+            if (entry.getKey() != null && entry.getValue() != null && !Attributes.Name.MAIN_CLASS.equals(entry.getKey())) {
                 properties.put(String.valueOf(entry.getKey()), String.valueOf(entry.getValue()));
             }
         }
-        mainClass = attrs.getValue(Attributes.Name.MAIN_CLASS);
+        manifestMainClass = attrs.getValue(Attributes.Name.MAIN_CLASS);
         version = attrs.getValue(FCModuleProperties.MODULE_VERSION);
         if (declaredName == null) {
             declaredName = attrs.getValue("Automatic-Module-Name");
@@ -152,6 +225,14 @@ public final class FCModuleDescriptor {
                     parseResources(child);
                 } else if ("provides".equals(name)) {
                     parseProvides(child);
+                } else if ("entrypoint".equals(name)) {
+                    declaredEntrypoints.add(parseEntrypoint(child));
+                } else if ("entrypoints".equals(name)) {
+                    for (Element entry : childElements(child)) {
+                        if ("entrypoint".equals(localName(entry))) {
+                            declaredEntrypoints.add(parseEntrypoint(entry));
+                        }
+                    }
                 }
             }
 
@@ -180,7 +261,7 @@ public final class FCModuleDescriptor {
         }
     }
 
-    private void parseDependencies(Element dependenciesElement) {
+    private void parseDependencies(Element dependenciesElement) throws IOException {
         for (Element dependency : childElements(dependenciesElement)) {
             if (!"module".equals(localName(dependency))) {
                 continue;
@@ -193,11 +274,29 @@ public final class FCModuleDescriptor {
             boolean importServices = "true".equalsIgnoreCase(services)
                     || "import".equalsIgnoreCase(services)
                     || "export".equalsIgnoreCase(services);
+            String versionRange = attr(dependency, "version-range");
+            if (versionRange.isEmpty()) {
+                versionRange = attr(dependency, "version");
+            }
+            String kindValue = attr(dependency, "kind");
+            DependencyKind kind = kindValue.isEmpty()
+                    ? (boolAttr(dependency, "optional", false) ? DependencyKind.OPTIONAL : DependencyKind.REQUIRED)
+                    : DependencyKind.parse(kindValue);
             dependencies.add(new Dependency(name,
-                    boolAttr(dependency, "optional", false),
+                    kind,
                     boolAttr(dependency, "export", false),
-                    importServices));
+                    importServices,
+                    versionRange.isEmpty() ? null : versionRange));
         }
+    }
+
+    private static Entrypoint parseEntrypoint(Element element) throws IOException {
+        String type = attr(element, "type");
+        String className = attr(element, "class");
+        if (type.isEmpty() || className.isEmpty()) {
+            throw new IOException("<entrypoint> requires type and class attributes");
+        }
+        return new Entrypoint(type, className, attr(element, "adapter"));
     }
 
     private void parseResources(Element resourcesElement) {

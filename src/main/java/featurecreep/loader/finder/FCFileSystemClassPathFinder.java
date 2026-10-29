@@ -3,10 +3,14 @@ package featurecreep.loader.finder;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.Enumeration;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.jar.JarEntry;
+import java.util.jar.JarFile;
 
 import org.jboss.modules.DelegatingModuleLoader;
 import org.jboss.modules.DependencySpec;
@@ -30,6 +34,7 @@ import org.jboss.modules.xml.XmlPullParserException;
 import featurecreep.loader.FCModuleDescriptor;
 import featurecreep.loader.FCModuleProperties;
 import featurecreep.loader.FCLoaderBasic;
+import featurecreep.loader.FCVersionRange;
 import featurecreep.loader.GameClassLoaderLocalLoader;
 import featurecreep.loader.finder.ModuleLoadingMap.ModuleLoadingMapEntry;
 
@@ -45,6 +50,38 @@ public class FCFileSystemClassPathFinder extends FileSystemClassPathModuleFinder
     private final ModuleLoader extensionModuleLoader;
 
     public static final PathFilter NO_MODULES_DIR;
+
+    private static final Map<String, Set<String>> APP_PATH_PACKAGES = new ConcurrentHashMap<String, Set<String>>();
+    private static volatile FCLoaderBasic appPathLoader;
+
+    /**
+     * Declares a module jar as already defined on the application class path. Its
+     * classes are then resolved from the application loader rather than from a
+     * second module-owned copy, so static state is shared between both sides.
+     */
+    public static void registerAppClassPathJar(File jar) throws IOException {
+        Set<String> packages = new LinkedHashSet<String>();
+        try (JarFile jarFile = new JarFile(jar)) {
+            Enumeration<JarEntry> entries = jarFile.entries();
+            while (entries.hasMoreElements()) {
+                String name = entries.nextElement().getName();
+                int slash = name.lastIndexOf('/');
+                if (name.endsWith(".class") && slash > 0) {
+                    packages.add(name.substring(0, slash));
+                }
+            }
+        }
+        APP_PATH_PACKAGES.put(jar.getCanonicalPath(), packages);
+    }
+
+    private static Set<String> appPathPackages(File source) {
+        if (source == null || APP_PATH_PACKAGES.isEmpty()) return null;
+        try {
+            return APP_PATH_PACKAGES.get(source.getCanonicalPath());
+        } catch (IOException e) {
+            return null;
+        }
+    }
 
     static {
         MultiplePathFilterBuilder builder = PathFilters.multiplePathFilterBuilder(true);
@@ -101,9 +138,18 @@ public class FCFileSystemClassPathFinder extends FileSystemClassPathModuleFinder
             addProperties(builder, entry, descriptor);
             setMainClass(builder, descriptor);
             setVersion(builder, descriptor);
-            addSelfContent(builder, resourceLoader, descriptor);
+            Set<String> appPathPackages = appPathPackages(entry.getSourceFile());
+            if (appPathPackages != null) {
+                builder.addDependency(DependencySpec.createClassLoaderDependencySpec(
+                        ClassLoader.getSystemClassLoader(), appPathPackages));
+                // Classes stay on the app loader; resources such as META-INF/services and icons still resolve here.
+                builder.addResourceRoot(ResourceLoaderSpec.createResourceLoaderSpec(resourceLoader,
+                        path -> !path.endsWith(".class")));
+            } else {
+                addSelfContent(builder, resourceLoader, descriptor);
+                addExtraResourceRoots(builder, resourceLoader, descriptor);
+            }
             builder.addDependency(DependencySpec.OWN_DEPENDENCY);
-            addExtraResourceRoots(builder, resourceLoader, descriptor);
 
             ModuleLoader bundledModuleLoader = bundledModuleLoader(entry, resourceLoader);
             addDescriptorDependencies(builder, descriptor, bundledModuleLoader, dependencyNames);
@@ -223,10 +269,60 @@ public class FCFileSystemClassPathFinder extends FileSystemClassPathModuleFinder
     }
 
     private void addDescriptorDependencies(ModuleSpec.Builder builder, FCModuleDescriptor descriptor,
-            ModuleLoader bundledModuleLoader, Set<String> dependencyNames) {
+            ModuleLoader bundledModuleLoader, Set<String> dependencyNames) throws ModuleLoadException {
         for (FCModuleDescriptor.Dependency dependency : descriptor.getDependencies()) {
+            if (dependency.isConflict()) {
+                continue;
+            }
+            String mismatch = dependencyVersionMismatch(dependency);
+            if (mismatch != null) {
+                if (dependency.getKind() == FCModuleDescriptor.DependencyKind.REQUIRED) {
+                    throw new ModuleLoadException("Dependency " + dependency.getName() + " of " + builder.getName()
+                            + " is incompatible: " + mismatch);
+                }
+                continue;
+            }
             addNamedDependency(builder, dependency.getName(), dependency.isOptional(), dependency.isExport(),
                     dependency.isServices(), bundledModuleLoader, dependencyNames);
+        }
+    }
+
+    /**
+     * Checks a declared dependency version range against the selected FeatureCreep
+     * module. A malformed range, or a module without a version, is a mismatch. A
+     * dependency that is not a FeatureCreep module in this loader cannot be
+     * checked, so it is allowed with a diagnostic.
+     *
+     * @return the mismatch reason, or {@code null} when compatible or unverifiable
+     */
+    private String dependencyVersionMismatch(FCModuleDescriptor.Dependency dependency) {
+        String spec = dependency.getVersionRange();
+        if (spec == null) {
+            return null;
+        }
+        FCVersionRange range;
+        try {
+            range = FCVersionRange.parse(spec);
+        } catch (IllegalArgumentException e) {
+            return "malformed version range '" + spec + "': " + e.getMessage();
+        }
+        ModuleLoadingMapEntry target = load.getModuleLoadingMap().get(dependency.getName());
+        if (target == null || target.getDescriptor() == null) {
+            if (load.getDebugMode()) {
+                System.out.println("Cannot verify version range '" + spec + "' for dependency "
+                        + dependency.getName() + "; it is not a discovered FeatureCreep module");
+            }
+            return null;
+        }
+        String version = target.getDescriptor().getVersion();
+        if (version == null || version.trim().isEmpty()) {
+            return "requires version " + spec + " but module " + dependency.getName() + " declares no version";
+        }
+        try {
+            return range.matches(version) ? null
+                    : "requires version " + spec + " but " + dependency.getName() + " is " + version;
+        } catch (IllegalArgumentException e) {
+            return dependency.getName() + " declares invalid version '" + version + "': " + e.getMessage();
         }
     }
 
@@ -342,5 +438,19 @@ public class FCFileSystemClassPathFinder extends FileSystemClassPathModuleFinder
     @Override
     public void setFCLoaderBasic(FCLoaderBasic fcloader) {
         this.load = fcloader;
+        appPathLoader = fcloader;
+    }
+
+    /**
+     * Returns the loader owning a class defined on the application class path by
+     * {@link #registerAppClassPathJar(File)}, or null if the class is not one of those.
+     */
+    public static FCLoaderBasic appClassPathLoader(Class<?> clazz) {
+        if (appPathLoader == null || clazz.getClassLoader() != ClassLoader.getSystemClassLoader()) return null;
+        String pkg = clazz.getPackageName().replace('.', '/');
+        for (Set<String> packages : APP_PATH_PACKAGES.values()) {
+            if (packages.contains(pkg)) return appPathLoader;
+        }
+        return null;
     }
 }

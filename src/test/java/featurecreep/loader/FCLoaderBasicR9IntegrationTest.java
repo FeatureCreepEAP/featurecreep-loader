@@ -17,6 +17,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.jar.JarEntry;
 import java.util.jar.JarOutputStream;
@@ -29,6 +30,10 @@ import org.jboss.modules.Module;
 import org.jboss.modules.ModuleFinder;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+
+import featurecreep.loader.config.FCConfigApi;
+import featurecreep.loader.config.FCConfigEntry;
+import featurecreep.loader.config.FCConfigRegistry;
 
 class FCLoaderBasicR9IntegrationTest {
 
@@ -104,6 +109,92 @@ class FCLoaderBasicR9IntegrationTest {
         loader.loadMods();
 
         assertNull(loader.getModule("foreign.mod"));
+    }
+
+    @Test
+    void targetGameAndLoaderRangesSkipIncompatibleModules() throws Exception {
+        Path mods = Files.createDirectories(tempDir.resolve("target-mods"));
+        jarDescriptorOnly(mods.resolve("right.jar"), descriptorXml("right.mod", "1.0",
+                "<property name=\"FeatureCreep-Target-Game\" value=\"minecraft\"/>"
+                        + "<property name=\"FeatureCreep-Target-Game-Version\" value=\"[1.20,1.22)\"/>"
+                        + "<property name=\"FeatureCreep-Loader-Version\" value=\">=12\"/>"), false);
+        jarDescriptorOnly(mods.resolve("wrong-game.jar"), descriptorXml("wrong.game", "1.0",
+                "<property name=\"FeatureCreep-Target-Game\" value=\"terraria\"/>"), false);
+        jarDescriptorOnly(mods.resolve("wrong-version.jar"), descriptorXml("wrong.version", "1.0",
+                "<property name=\"FeatureCreep-Target-Game-Version\" value=\"[1.22,)\"/>"), false);
+        jarDescriptorOnly(mods.resolve("malformed.jar"), descriptorXml("malformed.range", "1.0",
+                "<property name=\"FeatureCreep-Loader-Version\" value=\">=12,,&lt;\"/>"), false);
+
+        FCLoaderBasicR9 loader = new FCLoaderBasicR9(new TestProvider(mods), 1);
+        loader.loadMods();
+
+        assertNotNull(loader.getModule("right.mod"));
+        assertNull(loader.getModule("wrong.game"));
+        assertNull(loader.getModule("wrong.version"));
+        assertNull(loader.getModule("malformed.range"));
+    }
+
+    @Test
+    void dependencyVersionRangesAreCheckedBeforeResolution() throws Exception {
+        Path mods = Files.createDirectories(tempDir.resolve("dependency-mods"));
+        jarDescriptorOnly(mods.resolve("dep.jar"), descriptorXml("dep.one", "1.0", ""), false);
+        jarDescriptorOnly(mods.resolve("bad.jar"), descriptorXml("ranged.bad", "1.0", "",
+                "<module name=\"dep.one\" version=\"[2.0,)\"/>"), false);
+        jarDescriptorOnly(mods.resolve("good.jar"), descriptorXml("ranged.good", "1.0", "",
+                "<module name=\"dep.one\" version-range=\"[1.0,2.0)\"/>"), false);
+        jarDescriptorOnly(mods.resolve("optional.jar"), descriptorXml("ranged.optional", "1.0", "",
+                "<module name=\"dep.one\" version=\"[2.0,)\" optional=\"true\"/>"), false);
+
+        FCLoaderBasicR9 loader = new FCLoaderBasicR9(new TestProvider(mods), 1);
+        loader.loadMods();
+
+        assertNotNull(loader.getModule("dep.one"));
+        assertNotNull(loader.getModule("ranged.good"));
+        assertNotNull(loader.getModule("ranged.optional"),
+                "an unsatisfied optional dependency is skipped rather than failing the dependent");
+        assertNull(loader.getModule("ranged.bad"));
+    }
+
+    @Test
+    void configProvidersDeclaredAsServicesAreRegistered() throws Exception {
+        Path work = tempDir.resolve("config-work");
+        Path classes = compile(work, "cfg.Provider",
+                "package cfg; public final class Provider implements featurecreep.loader.config.FCConfigProvider {"
+                        + " public featurecreep.loader.config.FCConfigEntry createConfigEntry() {"
+                        + " return featurecreep.loader.config.FCConfigEntry.builder(\"cfg.mod\")"
+                        + ".displayName(\"Configured\").screenFactory(parent -> parent).build(); } }");
+        Path services = Files.createDirectories(classes.resolve("META-INF/services"));
+        Files.write(services.resolve("featurecreep.loader.config.FCConfigProvider"),
+                "cfg.Provider\n".getBytes(StandardCharsets.UTF_8));
+
+        Path mods = Files.createDirectories(tempDir.resolve("config-mods"));
+        jarDirectory(classes, mods.resolve("cfg.jar"), moduleXml("cfg.mod"), null);
+
+        FCLoaderBasicR9 loader = new FCLoaderBasicR9(new TestProvider(mods), 1);
+        loader.loadMods();
+
+        FCConfigEntry entry = loader.getConfigApi().getEntry("cfg.mod").orElse(null);
+        assertNotNull(entry, "service-declared config provider must register its entry");
+        assertEquals("Configured", entry.getDisplayName());
+        assertEquals(Optional.of("parent"), loader.getConfigApi().createScreen("cfg.mod", "parent"));
+    }
+
+    /** Public, non-runnable module descriptor with extra {@code <property>} elements. */
+    private static String descriptorXml(String name, String version, String extraProperties) {
+        return descriptorXml(name, version, extraProperties, "");
+    }
+
+    /** Public, non-runnable module descriptor with extra properties and {@code <module>} dependencies. */
+    private static String descriptorXml(String name, String version, String extraProperties, String dependencies) {
+        return "<module xmlns=\"urn:jboss:module:1.9\" name=\"" + name + "\" version=\"" + version + "\">"
+                + "<properties>"
+                + "<property name=\"FeatureCreep-Mod-Id\" value=\"" + name + "\"/>"
+                + "<property name=\"FeatureCreep-Visibility\" value=\"public\"/>"
+                + "<property name=\"FeatureCreep-Runnable\" value=\"false\"/>"
+                + extraProperties
+                + "</properties>"
+                + "<dependencies>" + dependencies + "</dependencies>"
+                + "</module>";
     }
 
     private static String moduleXml(String name) {
@@ -208,5 +299,10 @@ class FCLoaderBasicR9IntegrationTest {
         @Override public boolean isSuperLoaderModZip(File file) { return classifyAsSuperloader; }
         @Override public boolean isSuperLoaderModFolder(File folder) { return false; }
         @Override public ClassLoader getGameClassLoader() { return getClass().getClassLoader(); }
+        @Override public String getGameId() { return "minecraft"; }
+        @Override public String getGameVersion() { return "1.21.1"; }
+        @Override public String getLoaderVersion() { return "12"; }
+        @Override public FCConfigApi getConfigApi() { return configs; }
+        private final FCConfigRegistry configs = new FCConfigRegistry();
     }
 }
